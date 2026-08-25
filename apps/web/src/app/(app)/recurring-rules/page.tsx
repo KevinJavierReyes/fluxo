@@ -7,7 +7,7 @@ import {
   type CreateRecurringRuleInput,
 } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategoryGroups } from '@/hooks/use-categories';
@@ -20,6 +20,7 @@ import {
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -295,16 +296,11 @@ export default function RecurringRulesPage() {
                       {rule.isActive ? 'Activa' : 'Inactiva'}
                     </Badge>
                   </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
+                  <ConfirmDeleteButton
                     aria-label="Eliminar regla"
-                    onClick={() => deleteRule.mutate(rule.id)}
-                  >
-                    <Trash2Icon />
-                  </Button>
+                    description="Esta regla recurrente se eliminará de forma permanente. Esta acción no se puede deshacer."
+                    onConfirm={() => deleteRule.mutate(rule.id)}
+                  />
                 </div>
               </div>
             ))}

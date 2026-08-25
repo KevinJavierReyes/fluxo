@@ -2,7 +2,7 @@
 
 import { createSavingsGoalSchema, type CreateSavingsGoalInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -16,6 +16,7 @@ import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { InlineActionRow } from '@/components/inline-action-row';
+import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -156,16 +157,11 @@ export default function SavingsGoalsPage() {
                         ` · antes del ${new Date(goal.targetDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}`}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
+                  <ConfirmDeleteButton
                     aria-label="Eliminar meta"
-                    onClick={() => deleteGoal.mutate(goal.id)}
-                  >
-                    <Trash2Icon />
-                  </Button>
+                    description="Esta meta de ahorro se eliminará de forma permanente. Esta acción no se puede deshacer."
+                    onConfirm={() => deleteGoal.mutate(goal.id)}
+                  />
                 </div>
                 <Progress value={percent} />
                 <ContributeRow goalId={goal.id} />

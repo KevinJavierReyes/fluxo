@@ -8,7 +8,7 @@ import {
   type CreateCategoryInput,
 } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   useCategoryGroups,
@@ -20,6 +20,7 @@ import {
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -153,31 +154,21 @@ export default function CategoriesPage() {
                 <span className="font-medium">{group.name}</span>
                 <Badge variant="secondary">{group.type === CategoryType.INCOME ? 'Ingreso' : 'Egreso'}</Badge>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-destructive"
+              <ConfirmDeleteButton
                 aria-label="Eliminar grupo"
-                onClick={() => deleteGroup.mutate(group.id)}
-              >
-                <Trash2Icon />
-              </Button>
+                description="Este grupo y sus categorías se eliminarán de forma permanente. Esta acción no se puede deshacer."
+                onConfirm={() => deleteGroup.mutate(group.id)}
+              />
             </div>
             <div className="divide-y">
               {group.categories.map((category) => (
                 <div key={category.id} className="flex items-center justify-between px-4 py-2">
                   <span className="text-sm">{category.name}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
+                  <ConfirmDeleteButton
                     aria-label="Eliminar categoría"
-                    onClick={() => deleteCategory.mutate(category.id)}
-                  >
-                    <Trash2Icon />
-                  </Button>
+                    description="Esta categoría se eliminará de forma permanente. Esta acción no se puede deshacer."
+                    onConfirm={() => deleteCategory.mutate(category.id)}
+                  />
                 </div>
               ))}
               {group.categories.length === 0 && (

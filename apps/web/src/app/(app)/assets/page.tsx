@@ -2,12 +2,13 @@
 
 import { createAssetSchema, type CreateAssetInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useCreateAsset, useDeleteAsset, useAssets, useUpdateAsset } from '@/hooks/use-assets';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
+import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -115,16 +116,11 @@ export default function AssetsPage() {
                     />
                     Vendido
                   </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
+                  <ConfirmDeleteButton
                     aria-label="Eliminar activo"
-                    onClick={() => deleteAsset.mutate(asset.id)}
-                  >
-                    <Trash2Icon />
-                  </Button>
+                    description="Este activo se eliminará de forma permanente. Esta acción no se puede deshacer."
+                    onConfirm={() => deleteAsset.mutate(asset.id)}
+                  />
                 </div>
               </div>
             ))}

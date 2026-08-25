@@ -2,7 +2,7 @@
 
 import { createObligationSchema, type CreateObligationInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircle2Icon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { CheckCircle2Icon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -18,6 +18,7 @@ import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { InlineActionRow } from '@/components/inline-action-row';
+import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -225,16 +226,11 @@ export default function ObligationsPage() {
                     />
                     Pagada
                   </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
+                  <ConfirmDeleteButton
                     aria-label="Eliminar obligación"
-                    onClick={() => deleteObligation.mutate(obligation.id)}
-                  >
-                    <Trash2Icon />
-                  </Button>
+                    description="Esta obligación se eliminará de forma permanente. Esta acción no se puede deshacer."
+                    onConfirm={() => deleteObligation.mutate(obligation.id)}
+                  />
                 </div>
               </div>
               {obligation.linkedRecurringRuleId ? (

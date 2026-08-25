@@ -6,7 +6,7 @@ import {
   type CreateExpenseTemplateInput,
 } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -21,6 +21,7 @@ import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { InlineActionRow } from '@/components/inline-action-row';
+import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -188,16 +189,11 @@ export default function ExpenseTemplatesPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <ApplyRow templateId={template.id} />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
+                  <ConfirmDeleteButton
                     aria-label="Eliminar plantilla"
-                    onClick={() => deleteTemplate.mutate(template.id)}
-                  >
-                    <Trash2Icon />
-                  </Button>
+                    description="Esta plantilla se eliminará de forma permanente. Esta acción no se puede deshacer."
+                    onConfirm={() => deleteTemplate.mutate(template.id)}
+                  />
                 </div>
               </div>
             ))}
