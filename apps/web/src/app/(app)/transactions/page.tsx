@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
 
 function dateToUtcMidnight(date: Date): Date {
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -272,9 +273,16 @@ export default function TransactionsPage() {
                       {new Date(tx.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={tx.type === 'INCOME' ? 'default' : 'secondary'}>
-                        {tx.type === 'INCOME' ? 'Ingreso' : 'Egreso'}
-                      </Badge>
+                      {(() => {
+                        const meta = TRANSACTION_TYPE_META[tx.type];
+                        const Icon = meta.icon;
+                        return (
+                          <Badge variant={meta.variant}>
+                            <Icon data-icon="inline-start" />
+                            {meta.label}
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>{accountById.get(tx.accountId) ?? '—'}</TableCell>
                     <TableCell>{categoryById.get(tx.categoryId) ?? '—'}</TableCell>

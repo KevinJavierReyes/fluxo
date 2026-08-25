@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
 
 export default function CategoriesPage() {
   const { data: groups, isLoading, isError } = useCategoryGroups();
@@ -152,7 +153,16 @@ export default function CategoriesPage() {
             <div className="flex items-center justify-between border-b px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{group.name}</span>
-                <Badge variant="secondary">{group.type === CategoryType.INCOME ? 'Ingreso' : 'Egreso'}</Badge>
+                {(() => {
+                  const meta = TRANSACTION_TYPE_META[group.type];
+                  const Icon = meta.icon;
+                  return (
+                    <Badge variant={meta.variant}>
+                      <Icon data-icon="inline-start" />
+                      {meta.label}
+                    </Badge>
+                  );
+                })()}
               </div>
               <ConfirmDeleteButton
                 aria-label="Eliminar grupo"
