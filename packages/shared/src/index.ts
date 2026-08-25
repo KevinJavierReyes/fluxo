@@ -11,5 +11,6 @@ export * from "./schemas/obligation.schema";
 export * from "./schemas/asset.schema";
 export * from "./schemas/cashflow.schema";
 export * from "./schemas/dashboard.schema";
+export * from "./schemas/overview.schema";
 
 export * from "./seed-data/default-categories";

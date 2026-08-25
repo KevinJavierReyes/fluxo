@@ -4,6 +4,7 @@
 import type {
   AccountType,
   CategoryType,
+  OverviewGranularity,
   RecurrenceFrequency,
   TransactionType,
 } from '@fluxo/shared';
@@ -142,4 +143,64 @@ export interface Asset {
   notes: string | null;
   isSold: boolean;
   soldAt: string | null;
+}
+
+export interface OverviewWallet {
+  id: string;
+  name: string;
+  type: AccountType;
+  balance: number;
+}
+
+export interface OverviewBalanceBucket {
+  bucket: string;
+  openingBalance: number;
+  closingBalance: number;
+  income: number;
+  expense: number;
+  isNegative: boolean;
+  isFuture: boolean;
+}
+
+export interface OverviewChangesBucket {
+  bucket: string;
+  income: number;
+  expense: number;
+  net: number;
+  isFuture: boolean;
+}
+
+export interface OverviewGroupBreakdown {
+  groupId: string;
+  name: string;
+  color: string;
+  icon: string;
+  amount: number;
+  transactionCount: number;
+  percentage: number;
+}
+
+export interface Overview {
+  today: string;
+  hasFuture: boolean;
+  granularity: OverviewGranularity;
+  totalBalance: number;
+  wallets: OverviewWallet[];
+  totals: {
+    endingBalance: number;
+    periodChange: number;
+    periodIncome: number;
+    periodExpenses: number;
+    transactionCount: number;
+  };
+  balanceSeries: OverviewBalanceBucket[];
+  changesSeries: OverviewChangesBucket[];
+  incomeByGroup: OverviewGroupBreakdown[];
+  expenseByGroup: OverviewGroupBreakdown[];
+  amountRange: { min: number; max: number };
+  projection: {
+    startingBalance: number;
+    points: CashflowDayPoint[];
+    negativeDays: string[];
+  };
 }

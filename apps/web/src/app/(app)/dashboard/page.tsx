@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo, useState } from 'react';
+import type { OverviewGranularity } from '@fluxo/shared';
 import { AlertTriangleIcon, TrendingUpIcon } from 'lucide-react';
 import {
   Area,
@@ -7,39 +9,104 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  ResponsiveContainer,
+  Legend,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { useDashboardSummary } from '@/hooks/use-dashboard';
+import { useOverview } from '@/hooks/use-overview';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  CHART_AXIS_TICK,
+  CHART_COLORS,
+  CHART_TOOLTIP_STYLE,
+  ChartContainer,
+} from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { ChartCard } from '@/components/chart-card';
 import { EmptyState } from '@/components/empty-state';
 import { QueryError } from '@/components/query-error';
-
-function formatCurrency(value: number) {
-  return `S/ ${value.toFixed(2)}`;
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PE', { timeZone: 'UTC', day: '2-digit', month: 'short' });
-}
+import { DateRangePicker } from '@/components/date-range-picker';
+import { DonutBreakdownCard } from '@/components/donut-breakdown-card';
+import { GranularityToggle } from '@/components/granularity-toggle';
+import {
+  EMPTY_FILTERS,
+  OverviewFilters,
+  type OverviewFilterState,
+} from '@/components/overview-filters';
+import { WalletPreview } from '@/components/wallet-preview';
+import {
+  availableGranularities,
+  defaultRange,
+  resolveGranularity,
+  type DateRange,
+} from '@/lib/date-range';
+import {
+  formatCompactCurrency,
+  formatCurrency,
+  formatDate,
+  formatLongDate,
+  formatSignedCurrency,
+} from '@/lib/format';
+import { cn } from '@/lib/utils';
+import type { Overview } from '@/lib/types';
 
 export default function DashboardPage() {
-  const { data, isLoading, isError } = useDashboardSummary();
+  const [range, setRange] = useState<DateRange>(defaultRange);
+  const [preferredGranularity, setPreferredGranularity] =
+    useState<OverviewGranularity>('day');
+  const [filters, setFilters] = useState<OverviewFilterState>(EMPTY_FILTERS);
+
+  const available = availableGranularities(range);
+  const granularity = resolveGranularity(range, preferredGranularity);
+
+  const { data, isLoading, isError, isFetching } = useOverview({
+    range,
+    granularity,
+    accountId: filters.accountId,
+    categoryGroupIds: filters.categoryGroupIds,
+    minAmount: filters.minAmount,
+    maxAmount: filters.maxAmount,
+  });
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Dashboard" description="Tu flujo de caja proyectado a los próximos 90 días." />
+      <PageHeader
+        title="Dashboard"
+        description="Tus cuentas, tus movimientos del periodo y hacia dónde va tu saldo."
+      />
+
+      <WalletPreview
+        wallets={data?.wallets}
+        selectedAccountId={filters.accountId}
+        onSelectAccount={(accountId) => setFilters({ ...filters, accountId })}
+        isLoading={isLoading}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-heading text-lg font-medium">Resumen del periodo</h2>
+        <DateRangePicker value={range} onValueChange={setRange} />
+      </div>
+
+      <OverviewFilters
+        value={filters}
+        onValueChange={setFilters}
+        amountRange={data?.amountRange}
+      />
 
       {isLoading && (
         <div className="flex flex-col gap-6">
           <Skeleton className="h-16 w-full" />
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <Skeleton className="h-24" />
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
@@ -50,133 +117,344 @@ export default function DashboardPage() {
 
       {isError && <QueryError message="No se pudo cargar el dashboard." />}
 
-      {data && <DashboardContent data={data} />}
+      {data && (
+        <div
+          className={cn(
+            'flex flex-col gap-6 transition-opacity',
+            isFetching && 'opacity-70',
+          )}
+        >
+          <ProjectionAlert projection={data.projection} />
+          <KpiRow data={data} />
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <BalanceChart
+              data={data}
+              granularity={granularity}
+              available={available}
+              onGranularityChange={setPreferredGranularity}
+            />
+            <ChangesChart
+              data={data}
+              granularity={granularity}
+              available={available}
+              onGranularityChange={setPreferredGranularity}
+            />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <DonutBreakdownCard
+              title="Ingresos del periodo"
+              description={formatLongDate(range.from) + ' – ' + formatLongDate(range.to)}
+              data={data.incomeByGroup}
+              total={data.totals.periodIncome}
+              emptyMessage="No hay ingresos en este periodo."
+              tone="income"
+            />
+            <DonutBreakdownCard
+              title="Egresos del periodo"
+              description={formatLongDate(range.from) + ' – ' + formatLongDate(range.to)}
+              data={data.expenseByGroup}
+              total={data.totals.periodExpenses}
+              emptyMessage="No hay egresos en este periodo."
+              tone="expense"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function DashboardContent({ data }: { data: NonNullable<ReturnType<typeof useDashboardSummary>['data']> }) {
-  const chartData = data.projection.points.map((point) => ({
-    date: point.date,
-    saldo: point.closingBalance,
-  }));
+/** El radar de flujo de caja: mira siempre los próximos 90 días, pase lo que pase con los filtros. */
+function ProjectionAlert({ projection }: { projection: Overview['projection'] }) {
+  const firstNegativeDay = projection.negativeDays[0];
 
-  const hasNegative = data.projection.negativeDays.length > 0;
-  const firstNegativeDay = hasNegative ? data.projection.negativeDays[0] : null;
+  if (firstNegativeDay) {
+    return (
+      <Alert variant="warning">
+        <AlertTriangleIcon />
+        <AlertDescription>
+          Cuidado, el {formatDate(firstNegativeDay)} tu saldo proyectado cae en rojo.
+          Revisa tu presupuesto.
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
-    <>
-      {hasNegative && firstNegativeDay ? (
-        <Alert variant="warning">
-          <AlertTriangleIcon />
-          <AlertDescription>
-            Cuidado, el {formatDate(firstNegativeDay)} tu saldo proyectado cae en rojo. Revisa tu presupuesto.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Alert variant="success">
-          <TrendingUpIcon />
-          <AlertDescription>
-            Felicitaciones, mantienes un flujo de caja positivo en los próximos 90 días.
-          </AlertDescription>
-        </Alert>
-      )}
+    <Alert variant="success">
+      <TrendingUpIcon />
+      <AlertDescription>
+        Felicitaciones, mantienes un flujo de caja positivo en los próximos 90 días.
+      </AlertDescription>
+    </Alert>
+  );
+}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+function KpiRow({ data }: { data: Overview }) {
+  const items = [
+    {
+      label: 'Saldo total',
+      value: formatCurrency(data.totalBalance),
+      tone: data.totalBalance < 0 ? 'negative' : 'neutral',
+    },
+    {
+      label: 'Cambio del periodo',
+      value: formatSignedCurrency(data.totals.periodChange),
+      tone: data.totals.periodChange < 0 ? 'negative' : 'positive',
+    },
+    {
+      label: 'Egresos del periodo',
+      value: `-${formatCurrency(data.totals.periodExpenses)}`,
+      tone: 'negative',
+    },
+    {
+      label: 'Ingresos del periodo',
+      value: `+${formatCurrency(data.totals.periodIncome)}`,
+      tone: 'positive',
+    },
+  ] as const;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item) => (
+        <Card key={item.label}>
           <CardHeader>
-            <CardDescription>Saldo total</CardDescription>
-            <CardTitle className="text-2xl">{formatCurrency(data.totalBalance)}</CardTitle>
+            <CardDescription>{item.label}</CardDescription>
+            <CardTitle
+              className={cn(
+                'text-2xl tabular-nums',
+                item.tone === 'negative' && 'text-destructive',
+                item.tone === 'positive' && 'text-success',
+              )}
+            >
+              {item.value}
+            </CardTitle>
           </CardHeader>
         </Card>
-        {data.accounts.map((account) => (
-          <Card key={account.id}>
-            <CardHeader>
-              <CardDescription>{account.name}</CardDescription>
-              <CardTitle className="text-xl">{formatCurrency(account.balance)}</CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
+      ))}
+    </div>
+  );
+}
 
-      <ChartCard title="Saldo proyectado">
+/**
+ * Saldo a lo largo del periodo. Cuando el rango pasa de hoy, el tramo futuro se
+ * dibuja punteado: es la proyección basada en recurrencias y movimientos ya
+ * registrados a futuro.
+ */
+function BalanceChart({
+  data,
+  granularity,
+  available,
+  onGranularityChange,
+}: {
+  data: Overview;
+  granularity: OverviewGranularity;
+  available: Record<OverviewGranularity, boolean>;
+  onGranularityChange: (value: OverviewGranularity) => void;
+}) {
+  const chartData = useMemo(() => {
+    const series = data.balanceSeries;
+    const lastRealIndex = series.reduce(
+      (last, point, index) => (point.isFuture ? last : index),
+      -1,
+    );
+
+    return series.map((point, index) => ({
+      bucket: point.bucket,
+      // El punto de corte pertenece a ambas series para que las curvas se peguen.
+      real: point.isFuture ? null : point.closingBalance,
+      proyectado:
+        point.isFuture || index === lastRealIndex ? point.closingBalance : null,
+    }));
+  }, [data.balanceSeries]);
+
+  const hasFuture = data.balanceSeries.some((point) => point.isFuture);
+  const hasNegative = data.balanceSeries.some((point) => point.isNegative);
+  // El eje es categórico: la marca de "Hoy" tiene que caer sobre un bucket real.
+  const todayBucket = hasFuture
+    ? data.balanceSeries.filter((point) => !point.isFuture).at(-1)?.bucket
+    : undefined;
+
+  return (
+    <Card>
+      <CardHeader className="grid-cols-[1fr_auto] items-center">
+        <div>
+          <CardTitle>Saldo de cuentas</CardTitle>
+          <CardDescription>
+            {hasFuture
+              ? 'El tramo punteado es tu saldo proyectado.'
+              : 'Saldo acumulado al cierre de cada periodo.'}
+          </CardDescription>
+        </div>
+        <GranularityToggle
+          value={granularity}
+          available={available}
+          onValueChange={onGranularityChange}
+        />
+      </CardHeader>
+      <CardContent>
         {chartData.length === 0 ? (
-          <EmptyState message="Aún no hay movimientos programados en los próximos 90 días." />
+          <EmptyState message="No hay datos para este rango." />
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={chartData}>
+          <ChartContainer height={280}>
+            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0 }}>
               <defs>
                 <linearGradient id="saldoGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                  <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="saldoFuturoGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.12} />
+                  <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis
-                dataKey="date"
+                dataKey="bucket"
                 tickFormatter={(value: string) => formatDate(value)}
-                tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)' }}
+                tick={CHART_AXIS_TICK}
+                minTickGap={24}
               />
               <YAxis
-                tickFormatter={(value: number) => `S/${value.toFixed(0)}`}
-                tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)' }}
+                tickFormatter={formatCompactCurrency}
+                tick={CHART_AXIS_TICK}
+                width={64}
               />
               <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
-                labelFormatter={(label: string) => formatDate(label)}
-                contentStyle={{
-                  backgroundColor: 'var(--color-popover)',
-                  color: 'var(--color-popover-foreground)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 8,
-                  fontSize: 13,
-                }}
+                formatter={(value: number, name: string) => [
+                  formatCurrency(value),
+                  name === 'real' ? 'Saldo' : 'Saldo proyectado',
+                ]}
+                labelFormatter={(label: string) => formatLongDate(label)}
+                contentStyle={CHART_TOOLTIP_STYLE}
               />
+              {hasNegative && (
+                <ReferenceLine y={0} stroke={CHART_COLORS.expense} strokeDasharray="2 2" />
+              )}
+              {todayBucket && (
+                <ReferenceLine
+                  x={todayBucket}
+                  stroke={CHART_COLORS.axis}
+                  strokeDasharray="3 3"
+                  label={{
+                    value: 'Hoy',
+                    position: 'insideTopRight',
+                    fill: CHART_COLORS.axis,
+                    fontSize: 11,
+                  }}
+                />
+              )}
               <Area
-                type="stepAfter"
-                dataKey="saldo"
-                stroke="var(--color-primary)"
+                type="monotone"
+                dataKey="real"
+                stroke={CHART_COLORS.primary}
                 fill="url(#saldoGradient)"
                 strokeWidth={2}
+                connectNulls={false}
+                dot={false}
+                isAnimationActive={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="proyectado"
+                stroke={CHART_COLORS.primary}
+                strokeDasharray="5 4"
+                fill="url(#saldoFuturoGradient)"
+                strokeWidth={2}
+                connectNulls={false}
+                dot={false}
+                isAnimationActive={false}
               />
             </AreaChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         )}
-      </ChartCard>
+      </CardContent>
+    </Card>
+  );
+}
 
-      <ChartCard title="Gasto por categoría este mes">
-        {data.categoryBreakdown.length === 0 ? (
-          <EmptyState message="Aún no registras gastos este mes." />
+function ChangesChart({
+  data,
+  granularity,
+  available,
+  onGranularityChange,
+}: {
+  data: Overview;
+  granularity: OverviewGranularity;
+  available: Record<OverviewGranularity, boolean>;
+  onGranularityChange: (value: OverviewGranularity) => void;
+}) {
+  const hasMovements = data.changesSeries.some(
+    (point) => point.income > 0 || point.expense > 0,
+  );
+
+  return (
+    <Card>
+      <CardHeader className="grid-cols-[1fr_auto] items-center">
+        <div>
+          <CardTitle>Movimientos</CardTitle>
+          <CardDescription>Ingresos y egresos por periodo.</CardDescription>
+        </div>
+        <GranularityToggle
+          value={granularity}
+          available={available}
+          onValueChange={onGranularityChange}
+        />
+      </CardHeader>
+      <CardContent>
+        {!hasMovements ? (
+          <EmptyState message="No hay movimientos en este rango." />
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(200, data.categoryBreakdown.length * 36)}>
-            <BarChart data={data.categoryBreakdown} layout="vertical" margin={{ left: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
+          <ChartContainer height={280}>
+            <BarChart data={data.changesSeries} margin={{ top: 8, right: 8, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
               <XAxis
-                type="number"
-                tickFormatter={(value: number) => `S/${value.toFixed(0)}`}
-                tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)' }}
+                dataKey="bucket"
+                tickFormatter={(value: string) => formatDate(value)}
+                tick={CHART_AXIS_TICK}
+                minTickGap={24}
               />
               <YAxis
-                type="category"
-                dataKey="name"
-                width={160}
-                tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)' }}
+                tickFormatter={formatCompactCurrency}
+                tick={CHART_AXIS_TICK}
+                width={64}
               />
               <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
-                contentStyle={{
-                  backgroundColor: 'var(--color-popover)',
-                  color: 'var(--color-popover-foreground)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 8,
-                  fontSize: 13,
-                }}
+                cursor={{ fill: 'var(--color-muted)', opacity: 0.4 }}
+                formatter={(value: number, name: string) => [
+                  formatCurrency(value),
+                  name === 'income' ? 'Ingresos' : 'Egresos',
+                ]}
+                labelFormatter={(label: string) => formatLongDate(label)}
+                contentStyle={CHART_TOOLTIP_STYLE}
               />
-              <Bar dataKey="amount" fill="var(--color-primary)" radius={[0, 4, 4, 0]} maxBarSize={24} />
+              <Legend
+                formatter={(value: string) =>
+                  value === 'income' ? 'Ingresos' : 'Egresos'
+                }
+                iconType="circle"
+                wrapperStyle={{ fontSize: 12 }}
+              />
+              <Bar
+                dataKey="income"
+                fill={CHART_COLORS.income}
+                radius={[3, 3, 0, 0]}
+                maxBarSize={28}
+                isAnimationActive={false}
+              />
+              <Bar
+                dataKey="expense"
+                fill={CHART_COLORS.expense}
+                radius={[3, 3, 0, 0]}
+                maxBarSize={28}
+                isAnimationActive={false}
+              />
             </BarChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         )}
-      </ChartCard>
-    </>
+      </CardContent>
+    </Card>
   );
 }
