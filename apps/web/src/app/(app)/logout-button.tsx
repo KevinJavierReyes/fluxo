@@ -1,9 +1,11 @@
 'use client';
 
+import { LogOutIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
 
-export function LogoutButton() {
+export function LogoutButton({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
 
   const onLogout = async () => {
@@ -14,8 +16,15 @@ export function LogoutButton() {
   };
 
   return (
-    <button type="button" onClick={onLogout} className="underline">
-      Cerrar sesión
-    </button>
+    <Button
+      type="button"
+      variant="ghost"
+      size={collapsed ? 'icon' : 'sm'}
+      className={collapsed ? undefined : 'w-full justify-start gap-2'}
+      onClick={onLogout}
+    >
+      <LogOutIcon />
+      {!collapsed && 'Cerrar sesión'}
+    </Button>
   );
 }

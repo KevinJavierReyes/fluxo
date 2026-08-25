@@ -6,8 +6,9 @@ import {
   type CreateExpenseTemplateInput,
 } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategoryGroups } from '@/hooks/use-categories';
 import {
@@ -17,6 +18,15 @@ import {
   useExpenseTemplates,
 } from '@/hooks/use-expense-templates';
 import { QueryError } from '@/components/query-error';
+import { PageHeader } from '@/components/page-header';
+import { EmptyState } from '@/components/empty-state';
+import { InlineActionRow } from '@/components/inline-action-row';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -27,27 +37,16 @@ function ApplyRow({ templateId }: { templateId: string }) {
   const applyTemplate = useApplyExpenseTemplate();
 
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-      />
-      <button
-        type="button"
-        onClick={() =>
-          applyTemplate.mutate({
-            id: templateId,
-            input: { date: new Date(`${date}T00:00:00Z`) },
-          })
-        }
-        disabled={applyTemplate.isPending}
-        className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
-      >
-        Aplicar
-      </button>
-    </div>
+    <InlineActionRow
+      submitLabel="Aplicar"
+      pending={applyTemplate.isPending}
+      error={applyTemplate.isError ? applyTemplate.error.message : null}
+      onSubmit={() =>
+        applyTemplate.mutate({ id: templateId, input: { date: new Date(`${date}T00:00:00Z`) } })
+      }
+    >
+      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+    </InlineActionRow>
   );
 }
 
@@ -66,113 +65,145 @@ export default function ExpenseTemplatesPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<CreateExpenseTemplateInput>({
     resolver: zodResolver(createExpenseTemplateSchema),
-    defaultValues: { type: TransactionType.EXPENSE },
+    defaultValues: { type: TransactionType.EXPENSE, categoryId: '' },
   });
 
   const onSubmit = async (values: CreateExpenseTemplateInput) => {
     await createTemplate.mutateAsync(values);
-    reset({ type: TransactionType.EXPENSE });
+    reset({ type: TransactionType.EXPENSE, categoryId: '' });
   };
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Gastos frecuentes</h1>
-        <p className="text-gray-600">
-          Plantillas rápidas para registrar en un clic un gasto que repites seguido.
-        </p>
-      </div>
+      <PageHeader
+        title="Gastos frecuentes"
+        description="Plantillas rápidas para registrar en un clic un gasto que repites seguido."
+      />
 
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="flex flex-wrap items-end gap-3 rounded border p-4"
-      >
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Nombre</label>
-          <input className="rounded border px-3 py-2" {...register('name')} />
-          {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Categoría</label>
-          <select className="max-w-[220px] rounded border px-3 py-2" {...register('categoryId')}>
-            <option value="">Selecciona</option>
-            {categories?.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.groupName} / {category.name}
-              </option>
-            ))}
-          </select>
-          {errors.categoryId && (
-            <p className="text-sm text-red-600">{errors.categoryId.message}</p>
-          )}
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Cuenta por defecto</label>
-          <select className="rounded border px-3 py-2" {...register('accountId')}>
-            <option value="">Elegir al aplicar</option>
-            {accounts?.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Monto sugerido</label>
-          <input
-            type="number"
-            step="0.01"
-            className="w-28 rounded border px-3 py-2"
-            {...register('suggestedAmount')}
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-        >
-          Crear plantilla
-        </button>
-        {createTemplate.isError && (
-          <p className="w-full text-sm text-red-600">{createTemplate.error.message}</p>
-        )}
-      </form>
+      <Card>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>Nombre</Label>
+              <Input {...register('name')} />
+              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Categoría</Label>
+              <Controller
+                name="categoryId"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-52">
+                      <SelectValue placeholder="Selecciona">
+                        {(value: string) => categoryById.get(value)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories?.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.groupName} / {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.categoryId && <p className="text-sm text-destructive">{errors.categoryId.message}</p>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Cuenta por defecto</Label>
+              <Controller
+                name="accountId"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-44">
+                      <SelectValue placeholder="Elegir al aplicar">
+                        {(value: string) => accountById.get(value)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts?.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Monto sugerido</Label>
+              <Input
+                type="number"
+                step="0.01"
+                className="w-28"
+                {...register('suggestedAmount', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
+              />
+            </div>
+            <Button type="submit" disabled={isSubmitting}>
+              <PlusIcon />
+              Crear plantilla
+            </Button>
+            {createTemplate.isError && (
+              <p className="w-full text-sm text-destructive">{createTemplate.error.message}</p>
+            )}
+          </form>
+        </CardContent>
+      </Card>
 
-      {isLoading && <p>Cargando...</p>}
+      {isLoading && (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      )}
       {isError && <QueryError message="No se pudieron cargar tus plantillas." />}
+      {templates && templates.length === 0 && <EmptyState message="Aún no tienes plantillas." />}
 
-      <ul className="flex flex-col divide-y rounded border">
-        {templates?.map((template) => (
-          <li key={template.id} className="flex items-center justify-between px-4 py-3">
-            <div>
-              <p className="font-medium">{template.name}</p>
-              <p className="text-sm text-gray-600">
-                {categoryById.get(template.categoryId) ?? '—'}
-                {template.accountId ? ` · ${accountById.get(template.accountId)}` : ''}
-                {template.suggestedAmount ? ` · S/ ${Number(template.suggestedAmount).toFixed(2)}` : ''}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <ApplyRow templateId={template.id} />
-              <button
-                type="button"
-                onClick={() => deleteTemplate.mutate(template.id)}
-                className="text-sm text-red-600 underline"
+      {templates && templates.length > 0 && (
+        <Card>
+          <CardContent className="divide-y p-0">
+            {templates.map((template) => (
+              <div
+                key={template.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 first:pt-4 last:pb-4"
               >
-                Eliminar
-              </button>
-            </div>
-          </li>
-        ))}
-        {templates?.length === 0 && (
-          <li className="px-4 py-3 text-sm text-gray-600">Aún no tienes plantillas.</li>
-        )}
-      </ul>
+                <div>
+                  <p className="font-medium">{template.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {categoryById.get(template.categoryId) ?? '—'}
+                    {template.accountId ? ` · ${accountById.get(template.accountId)}` : ''}
+                    {template.suggestedAmount ? ` · S/ ${Number(template.suggestedAmount).toFixed(2)}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <ApplyRow templateId={template.id} />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Eliminar plantilla"
+                    onClick={() => deleteTemplate.mutate(template.id)}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

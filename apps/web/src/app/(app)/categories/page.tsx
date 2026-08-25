@@ -8,7 +8,8 @@ import {
   type CreateCategoryInput,
 } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { Controller, useForm } from 'react-hook-form';
 import {
   useCategoryGroups,
   useCreateCategory,
@@ -17,6 +18,14 @@ import {
   useDeleteCategoryGroup,
 } from '@/hooks/use-categories';
 import { QueryError } from '@/components/query-error';
+import { PageHeader } from '@/components/page-header';
+import { EmptyState } from '@/components/empty-state';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function CategoriesPage() {
   const { data: groups, isLoading, isError } = useCategoryGroups();
@@ -32,7 +41,7 @@ export default function CategoriesPage() {
 
   const categoryForm = useForm<CreateCategoryInput>({
     resolver: zodResolver(createCategorySchema),
-    defaultValues: { sortOrder: 0 },
+    defaultValues: { groupId: '', sortOrder: 0 },
   });
 
   const onCreateGroup = async (values: CreateCategoryGroupInput) => {
@@ -47,113 +56,135 @@ export default function CategoriesPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Categorías</h1>
-        <p className="text-gray-600">Grupos de ingreso/egreso y sus subcategorías.</p>
-      </div>
+      <PageHeader title="Categorías" description="Grupos de ingreso/egreso y sus subcategorías." />
 
       <div className="grid gap-4 md:grid-cols-2">
-        <form
-          onSubmit={groupForm.handleSubmit(onCreateGroup)}
-          className="flex flex-col gap-3 rounded border p-4"
-        >
-          <h2 className="font-medium">Nuevo grupo</h2>
-          <input
-            placeholder="Nombre del grupo"
-            className="rounded border px-3 py-2"
-            {...groupForm.register('name')}
-          />
-          {groupForm.formState.errors.name && (
-            <p className="text-sm text-red-600">{groupForm.formState.errors.name.message}</p>
-          )}
-          <select className="rounded border px-3 py-2" {...groupForm.register('type')}>
-            <option value={CategoryType.EXPENSE}>Egreso</option>
-            <option value={CategoryType.INCOME}>Ingreso</option>
-          </select>
-          <button
-            type="submit"
-            disabled={groupForm.formState.isSubmitting}
-            className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-          >
-            Crear grupo
-          </button>
-        </form>
+        <Card>
+          <CardHeader>
+            <CardTitle>Nuevo grupo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={groupForm.handleSubmit(onCreateGroup)} className="flex flex-col gap-3">
+              <Input placeholder="Nombre del grupo" {...groupForm.register('name')} />
+              {groupForm.formState.errors.name && (
+                <p className="text-sm text-destructive">{groupForm.formState.errors.name.message}</p>
+              )}
+              <Controller
+                name="type"
+                control={groupForm.control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {(value: CategoryType) => (value === CategoryType.INCOME ? 'Ingreso' : 'Egreso')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={CategoryType.EXPENSE}>Egreso</SelectItem>
+                      <SelectItem value={CategoryType.INCOME}>Ingreso</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <Button type="submit" disabled={groupForm.formState.isSubmitting}>
+                <PlusIcon />
+                Crear grupo
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-        <form
-          onSubmit={categoryForm.handleSubmit(onCreateCategory)}
-          className="flex flex-col gap-3 rounded border p-4"
-        >
-          <h2 className="font-medium">Nueva categoría</h2>
-          <select className="rounded border px-3 py-2" {...categoryForm.register('groupId')}>
-            <option value="">Selecciona un grupo</option>
-            {groups?.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-          {categoryForm.formState.errors.groupId && (
-            <p className="text-sm text-red-600">
-              {categoryForm.formState.errors.groupId.message}
-            </p>
-          )}
-          <input
-            placeholder="Nombre de la categoría"
-            className="rounded border px-3 py-2"
-            {...categoryForm.register('name')}
-          />
-          {categoryForm.formState.errors.name && (
-            <p className="text-sm text-red-600">{categoryForm.formState.errors.name.message}</p>
-          )}
-          <button
-            type="submit"
-            disabled={categoryForm.formState.isSubmitting}
-            className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-          >
-            Crear categoría
-          </button>
-        </form>
+        <Card>
+          <CardHeader>
+            <CardTitle>Nueva categoría</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={categoryForm.handleSubmit(onCreateCategory)} className="flex flex-col gap-3">
+              <Controller
+                name="groupId"
+                control={categoryForm.control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona un grupo">
+                        {(value: string) => groups?.find((g) => g.id === value)?.name}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups?.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {categoryForm.formState.errors.groupId && (
+                <p className="text-sm text-destructive">{categoryForm.formState.errors.groupId.message}</p>
+              )}
+              <Input placeholder="Nombre de la categoría" {...categoryForm.register('name')} />
+              {categoryForm.formState.errors.name && (
+                <p className="text-sm text-destructive">{categoryForm.formState.errors.name.message}</p>
+              )}
+              <Button type="submit" disabled={categoryForm.formState.isSubmitting}>
+                <PlusIcon />
+                Crear categoría
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
-      {isLoading && <p>Cargando...</p>}
+      {isLoading && (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      )}
       {isError && <QueryError message="No se pudieron cargar tus categorías." />}
+      {groups && groups.length === 0 && <EmptyState message="Aún no tienes grupos de categorías." />}
 
       <div className="flex flex-col gap-4">
         {groups?.map((group) => (
-          <div key={group.id} className="rounded border">
-            <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-2">
-              <span className="font-medium">
-                {group.name}{' '}
-                <span className="text-sm text-gray-500">
-                  ({group.type === CategoryType.INCOME ? 'Ingreso' : 'Egreso'})
-                </span>
-              </span>
-              <button
+          <Card key={group.id}>
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{group.name}</span>
+                <Badge variant="secondary">{group.type === CategoryType.INCOME ? 'Ingreso' : 'Egreso'}</Badge>
+              </div>
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-destructive"
+                aria-label="Eliminar grupo"
                 onClick={() => deleteGroup.mutate(group.id)}
-                className="text-sm text-red-600 underline"
               >
-                Eliminar grupo
-              </button>
+                <Trash2Icon />
+              </Button>
             </div>
-            <ul className="divide-y">
+            <div className="divide-y">
               {group.categories.map((category) => (
-                <li key={category.id} className="flex items-center justify-between px-4 py-2">
-                  <span>{category.name}</span>
-                  <button
+                <div key={category.id} className="flex items-center justify-between px-4 py-2">
+                  <span className="text-sm">{category.name}</span>
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Eliminar categoría"
                     onClick={() => deleteCategory.mutate(category.id)}
-                    className="text-sm text-red-600 underline"
                   >
-                    Eliminar
-                  </button>
-                </li>
+                    <Trash2Icon />
+                  </Button>
+                </div>
               ))}
               {group.categories.length === 0 && (
-                <li className="px-4 py-2 text-sm text-gray-500">Sin categorías todavía.</li>
+                <p className="px-4 py-2 text-sm text-muted-foreground">Sin categorías todavía.</p>
               )}
-            </ul>
-          </div>
+            </div>
+          </Card>
         ))}
       </div>
     </div>

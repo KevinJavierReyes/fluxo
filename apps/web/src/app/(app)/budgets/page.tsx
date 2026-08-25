@@ -2,10 +2,21 @@
 
 import { createBudgetSchema, type CreateBudgetInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { Controller, useForm } from 'react-hook-form';
 import { useCategoryGroups } from '@/hooks/use-categories';
 import { useBudgetStatus, useBudgets, useCreateBudget, useDeleteBudget } from '@/hooks/use-budgets';
 import { QueryError } from '@/components/query-error';
+import { PageHeader } from '@/components/page-header';
+import { EmptyState } from '@/components/empty-state';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 export default function BudgetsPage() {
   const { data: groups } = useCategoryGroups();
@@ -19,12 +30,14 @@ export default function BudgetsPage() {
   const statusByGroup = new Map(status?.map((s) => [s.categoryGroupId, s]));
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<CreateBudgetInput>({
     resolver: zodResolver(createBudgetSchema),
+    defaultValues: { categoryGroupId: '' },
   });
 
   const onSubmit = async (values: CreateBudgetInput) => {
@@ -34,105 +47,105 @@ export default function BudgetsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Presupuestos</h1>
-        <p className="text-gray-600">Límite mensual de gasto por categoría, con seguimiento en vivo.</p>
-      </div>
+      <PageHeader title="Presupuestos" description="Límite mensual de gasto por categoría, con seguimiento en vivo." />
 
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="flex flex-wrap items-end gap-3 rounded border p-4"
-      >
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Grupo de categoría</label>
-          <select className="rounded border px-3 py-2" {...register('categoryGroupId')}>
-            <option value="">Selecciona</option>
-            {expenseGroups?.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-          {errors.categoryGroupId && (
-            <p className="text-sm text-red-600">{errors.categoryGroupId.message}</p>
-          )}
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Límite mensual</label>
-          <input
-            type="number"
-            step="0.01"
-            className="w-32 rounded border px-3 py-2"
-            {...register('amount')}
-          />
-          {errors.amount && <p className="text-sm text-red-600">{errors.amount.message}</p>}
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Vigente desde</label>
-          <input
-            type="date"
-            className="rounded border px-3 py-2"
-            {...register('effectiveFrom', {
-              setValueAs: (v: string) => (v ? new Date(`${v}T00:00:00Z`) : undefined),
-            })}
-          />
-          {errors.effectiveFrom && (
-            <p className="text-sm text-red-600">{errors.effectiveFrom.message}</p>
-          )}
-        </div>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-        >
-          Crear presupuesto
-        </button>
-        {createBudget.isError && (
-          <p className="w-full text-sm text-red-600">{createBudget.error.message}</p>
-        )}
-      </form>
+      <Card>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>Grupo de categoría</Label>
+              <Controller
+                name="categoryGroupId"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-52">
+                      <SelectValue placeholder="Selecciona">{(value: string) => groupById.get(value)}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {expenseGroups?.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.categoryGroupId && (
+                <p className="text-sm text-destructive">{errors.categoryGroupId.message}</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Límite mensual</Label>
+              <Input type="number" step="0.01" className="w-32" {...register('amount')} />
+              {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Vigente desde</Label>
+              <Input
+                type="date"
+                {...register('effectiveFrom', {
+                  setValueAs: (v: string) => (v ? new Date(`${v}T00:00:00Z`) : undefined),
+                })}
+              />
+              {errors.effectiveFrom && (
+                <p className="text-sm text-destructive">{errors.effectiveFrom.message}</p>
+              )}
+            </div>
+            <Button type="submit" disabled={isSubmitting}>
+              <PlusIcon />
+              Crear presupuesto
+            </Button>
+            {createBudget.isError && (
+              <p className="w-full text-sm text-destructive">{createBudget.error.message}</p>
+            )}
+          </form>
+        </CardContent>
+      </Card>
 
-      {isLoading && <p>Cargando...</p>}
+      {isLoading && (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      )}
       {isError && <QueryError message="No se pudieron cargar tus presupuestos." />}
+      {budgets && budgets.length === 0 && <EmptyState message="Aún no tienes presupuestos." />}
 
-      <ul className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
         {budgets?.map((budget) => {
           const s = statusByGroup.get(budget.categoryGroupId);
           const percent = s ? Math.min(100, s.percentUsed) : 0;
           return (
-            <li key={budget.id} className="rounded border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{groupById.get(budget.categoryGroupId) ?? '—'}</p>
-                  <p className={`text-sm ${s?.isOverBudget ? 'text-red-600' : 'text-gray-600'}`}>
-                    {s
-                      ? `S/ ${s.spentAmount.toFixed(2)} de S/ ${s.budgetAmount.toFixed(2)} este mes (${s.percentUsed.toFixed(0)}%)`
-                      : `Límite S/ ${Number(budget.amount).toFixed(2)}`}
-                  </p>
+            <Card key={budget.id}>
+              <CardContent className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{groupById.get(budget.categoryGroupId) ?? '—'}</p>
+                    <p className={cn('text-sm', s?.isOverBudget ? 'text-destructive' : 'text-muted-foreground')}>
+                      {s
+                        ? `S/ ${s.spentAmount.toFixed(2)} de S/ ${s.budgetAmount.toFixed(2)} este mes (${s.percentUsed.toFixed(0)}%)`
+                        : `Límite S/ ${Number(budget.amount).toFixed(2)}`}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Eliminar presupuesto"
+                    onClick={() => deleteBudget.mutate(budget.id)}
+                  >
+                    <Trash2Icon />
+                  </Button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => deleteBudget.mutate(budget.id)}
-                  className="text-sm text-red-600 underline"
-                >
-                  Eliminar
-                </button>
-              </div>
-              <div className="mt-2 h-2 w-full overflow-hidden rounded bg-gray-200">
-                <div
-                  className={`h-full ${s?.isOverBudget ? 'bg-red-600' : 'bg-black'}`}
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-            </li>
+                <Progress value={percent} indicatorClassName={s?.isOverBudget ? 'bg-destructive' : undefined} />
+              </CardContent>
+            </Card>
           );
         })}
-        {budgets?.length === 0 && (
-          <li className="rounded border px-4 py-3 text-sm text-gray-600">
-            Aún no tienes presupuestos.
-          </li>
-        )}
-      </ul>
+      </div>
     </div>
   );
 }

@@ -2,9 +2,19 @@
 
 import { AccountType, createAccountSchema, type CreateAccountInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { Controller, useForm } from 'react-hook-form';
 import { useAccounts, useCreateAccount, useDeleteAccount } from '@/hooks/use-accounts';
 import { QueryError } from '@/components/query-error';
+import { PageHeader } from '@/components/page-header';
+import { EmptyState } from '@/components/empty-state';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   BANK: 'Banco',
@@ -20,6 +30,7 @@ export default function AccountsPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -35,87 +46,94 @@ export default function AccountsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Cuentas</h1>
-        <p className="text-gray-600">Bancos, efectivo y tarjetas donde registras tus movimientos.</p>
-      </div>
+      <PageHeader title="Cuentas" description="Bancos, efectivo y tarjetas donde registras tus movimientos." />
 
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="flex flex-wrap items-end gap-3 rounded border p-4"
-      >
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="name">
-            Nombre
-          </label>
-          <input id="name" className="rounded border px-3 py-2" {...register('name')} />
-          {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="type">
-            Tipo
-          </label>
-          <select id="type" className="rounded border px-3 py-2" {...register('type')}>
-            {Object.values(AccountType).map((type) => (
-              <option key={type} value={type}>
-                {ACCOUNT_TYPE_LABELS[type]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="openingBalance">
-            Saldo inicial
-          </label>
-          <input
-            id="openingBalance"
-            type="number"
-            step="0.01"
-            className="w-32 rounded border px-3 py-2"
-            {...register('openingBalance')}
-          />
-          {errors.openingBalance && (
-            <p className="text-sm text-red-600">{errors.openingBalance.message}</p>
-          )}
-        </div>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-        >
-          Agregar cuenta
-        </button>
-        {createAccount.isError && (
-          <p className="w-full text-sm text-red-600">{createAccount.error.message}</p>
-        )}
-      </form>
+      <Card>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="name">Nombre</Label>
+              <Input id="name" {...register('name')} />
+              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="type">Tipo</Label>
+              <Controller
+                name="type"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="type" className="w-40">
+                      <SelectValue>{(value: AccountType) => ACCOUNT_TYPE_LABELS[value]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(AccountType).map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {ACCOUNT_TYPE_LABELS[type]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="openingBalance">Saldo inicial</Label>
+              <Input id="openingBalance" type="number" step="0.01" className="w-32" {...register('openingBalance')} />
+              {errors.openingBalance && (
+                <p className="text-sm text-destructive">{errors.openingBalance.message}</p>
+              )}
+            </div>
+            <Button type="submit" disabled={isSubmitting}>
+              <PlusIcon />
+              Agregar cuenta
+            </Button>
+            {createAccount.isError && (
+              <p className="w-full text-sm text-destructive">{createAccount.error.message}</p>
+            )}
+          </form>
+        </CardContent>
+      </Card>
 
-      {isLoading && <p>Cargando...</p>}
+      {isLoading && (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      )}
       {isError && <QueryError message="No se pudieron cargar tus cuentas." />}
 
-      <ul className="flex flex-col divide-y rounded border">
-        {accounts?.map((account) => (
-          <li key={account.id} className="flex items-center justify-between px-4 py-3">
-            <div>
-              <p className="font-medium">{account.name}</p>
-              <p className="text-sm text-gray-600">
-                {ACCOUNT_TYPE_LABELS[account.type]} · Saldo inicial S/{' '}
-                {Number(account.openingBalance).toFixed(2)}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => deleteAccount.mutate(account.id)}
-              className="text-sm text-red-600 underline"
-            >
-              Eliminar
-            </button>
-          </li>
-        ))}
-        {accounts?.length === 0 && (
-          <li className="px-4 py-3 text-sm text-gray-600">Aún no tienes cuentas.</li>
-        )}
-      </ul>
+      {accounts && accounts.length === 0 && <EmptyState message="Aún no tienes cuentas." />}
+
+      {accounts && accounts.length > 0 && (
+        <Card>
+          <CardContent className="divide-y p-0">
+            {accounts.map((account) => (
+              <div key={account.id} className="flex items-center justify-between px-4 py-3 first:pt-4 last:pb-4">
+                <div className="flex flex-col gap-1">
+                  <p className="font-medium">{account.name}</p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{ACCOUNT_TYPE_LABELS[account.type]}</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      Saldo inicial S/ {Number(account.openingBalance).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label="Eliminar cuenta"
+                  onClick={() => deleteAccount.mutate(account.id)}
+                >
+                  <Trash2Icon />
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
