@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts         Account[]
+  categoryGroups   CategoryGroup[]
+  transactions     Transaction[]
+  recurringRules   RecurringRule[]
+  expenseTemplates ExpenseTemplate[]
+  savingsGoals     SavingsGoal[]
+  budgets          Budget[]
+  obligations      Obligation[]
+  assets           Asset[]
+}
+
+enum AccountType {
+  BANK
+  CASH
+  CREDIT_CARD
+  OTHER
+}
+
+model Account {
+  id                 String      @id @default(cuid())
+  userId             String      @db.Uuid
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  type               AccountType @default(BANK)
+  openingBalance     Decimal     @default(0) @db.Decimal(14, 2)
+  openingBalanceDate DateTime    @default(now()) @db.Date
+  isArchived         Boolean     @default(false)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+model CategoryGroup {
+  id         String       @id @default(cuid())
+  userId     String       @db.Uuid
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  type       CategoryType
+  sortOrder  Int          @default(0)
+  isArchived Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  categories Category[]
+  budgets    Budget[]
+
+  @@unique([userId, name, type])
+  @@index([userId])
+}
+
+model Category {
+  id         String        @id @default(cuid())
+  userId     String        @db.Uuid
+  groupId    String
+  group      CategoryGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name       String
+  sortOrder  Int           @default(0)
+  isArchived Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  transactions Transaction[]
+
+  @@unique([groupId, name])
+  @@index([userId])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionSource {
+  MANUAL
+  RECURRING
+  TEMPLATE
+}
+
+model Transaction {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accountId  String
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  type        TransactionType
+  amount      Decimal         @db.Decimal(14, 2)
+  date        DateTime        @db.Date
+  description String?
+  source      TransactionSource @default(MANUAL)
+  isModified  Boolean         @default(false)
+
+  recurringRuleId   String?
+  recurringRule     RecurringRule?   @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  expenseTemplateId String?
+  expenseTemplate   ExpenseTemplate? @relation(fields: [expenseTemplateId], references: [id], onDelete: SetNull)
+  savingsGoalId     String?
+  savingsGoal       SavingsGoal?     @relation(fields: [savingsGoalId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
+  @@index([accountId, date])
+  @@index([recurringRuleId])
+  @@index([savingsGoalId])
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  CUSTOM
+}
+
+model RecurringRule {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  accountId   String
+  categoryId  String
+  type        TransactionType
+  amount      Decimal             @db.Decimal(14, 2)
+  description String?
+
+  frequency   RecurrenceFrequency
+  interval    Int                 @default(1)
+  byMonthDay  Int?
+  byWeekday   Int?
+  startDate   DateTime            @db.Date
+  endDate     DateTime?           @db.Date
+
+  isActive           Boolean   @default(true)
+  lastGeneratedUntil DateTime? @db.Date
+
+  occurrences Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ExpenseTemplate {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name            String
+  suggestedAmount Decimal?        @db.Decimal(14, 2)
+  accountId       String?
+  categoryId      String
+  type            TransactionType @default(EXPENSE)
+  isArchived      Boolean         @default(false)
+
+  usages Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model SavingsGoal {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String
+  targetAmount Decimal   @db.Decimal(14, 2)
+  targetDate   DateTime? @db.Date
+  isArchived   Boolean   @default(false)
+
+  contributions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Budget {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryGroupId String
+  categoryGroup   CategoryGroup @relation(fields: [categoryGroupId], references: [id], onDelete: Cascade)
+  amount          Decimal       @db.Decimal(14, 2)
+  effectiveFrom   DateTime      @db.Date
+  effectiveTo     DateTime?     @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, categoryGroupId, effectiveFrom])
+  @@index([userId])
+}
+
+model Obligation {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  creditorName          String
+  totalAmount           Decimal  @db.Decimal(14, 2)
+  monthlyPayment        Decimal  @db.Decimal(14, 2)
+  remainingMonths       Int?
+  interestRate          Decimal? @db.Decimal(5, 2)
+  description           String?
+  isPaidOff              Boolean  @default(false)
+  linkedRecurringRuleId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Asset {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name            String
+  estimatedValue  Decimal   @db.Decimal(14, 2)
+  maxSaleTimeDays Int?
+  notes           String?
+  isSold          Boolean   @default(false)
+  soldAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
