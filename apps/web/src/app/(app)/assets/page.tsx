@@ -1,86 +1,29 @@
 'use client';
 
-import { createAssetSchema, type CreateAssetInput } from '@fluxo/shared';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusIcon } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { useCreateAsset, useDeleteAsset, useAssets, useUpdateAsset } from '@/hooks/use-assets';
+import { PencilIcon } from 'lucide-react';
+import { useAssets, useDeleteAsset, useUpdateAsset } from '@/hooks/use-assets';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
+import { AssetFormDialog } from '@/components/asset-form-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AssetsPage() {
   const { data: assets, isLoading, isError } = useAssets();
-  const createAsset = useCreateAsset();
   const updateAsset = useUpdateAsset();
   const deleteAsset = useDeleteAsset();
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateAssetInput>({
-    resolver: zodResolver(createAssetSchema),
-  });
-
-  const onSubmit = async (values: CreateAssetInput) => {
-    await createAsset.mutateAsync(values);
-    reset({});
-  };
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Activos"
         description="Bienes que podrías convertir en efectivo si tu flujo de caja lo necesitara."
+        action={<AssetFormDialog />}
       />
-
-      <Card>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Activo</Label>
-              <Input {...register('name')} />
-              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>¿Cuánto me pagarían por él?</Label>
-              <Input type="number" step="0.01" className="w-32" {...register('estimatedValue')} />
-              {errors.estimatedValue && (
-                <p className="text-sm text-destructive">{errors.estimatedValue.message}</p>
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Días máximo para venderlo</Label>
-              <Input
-                type="number"
-                min={0}
-                className="w-32"
-                {...register('maxSaleTimeDays', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Observaciones</Label>
-              <Input {...register('notes')} />
-            </div>
-            <Button type="submit" disabled={isSubmitting}>
-              <PlusIcon />
-              Agregar activo
-            </Button>
-            {createAsset.isError && (
-              <p className="w-full text-sm text-destructive">{createAsset.error.message}</p>
-            )}
-          </form>
-        </CardContent>
-      </Card>
 
       {isLoading && (
         <div className="flex flex-col gap-2">
@@ -89,7 +32,12 @@ export default function AssetsPage() {
         </div>
       )}
       {isError && <QueryError message="No se pudieron cargar tus activos." />}
-      {assets && assets.length === 0 && <EmptyState message="Aún no tienes activos registrados." />}
+      {assets && assets.length === 0 && (
+        <EmptyState
+          message="Aún no tienes activos registrados."
+          action={<AssetFormDialog trigger={<Button type="button" variant="outline">Agregar el primero</Button>} />}
+        />
+      )}
 
       {assets && assets.length > 0 && (
         <Card>
@@ -116,6 +64,14 @@ export default function AssetsPage() {
                     />
                     Vendido
                   </label>
+                  <AssetFormDialog
+                    asset={asset}
+                    trigger={
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Editar activo">
+                        <PencilIcon />
+                      </Button>
+                    }
+                  />
                   <ConfirmDeleteButton
                     aria-label="Eliminar activo"
                     description="Este activo se eliminará de forma permanente. Esta acción no se puede deshacer."

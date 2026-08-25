@@ -92,7 +92,10 @@ export function AccountFormDialog({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) {
+        // Base UI puede reemitir onOpenChange(true) por eventos de refoco (p.ej. al
+        // cerrarse un diálogo anidado) aunque este ya estuviera abierto; sin el `!open`
+        // ese re-disparo resetea el formulario y borra lo que el usuario acaba de hacer.
+        if (next && !open) {
           mutation.reset();
           reset(defaultsFor(account));
         }

@@ -1,275 +1,41 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  CategoryType,
-  createCategoryGroupSchema,
-  createCategorySchema,
-  updateCategoryGroupSchema,
-  updateCategorySchema,
-  type CreateCategoryGroupInput,
-  type CreateCategoryInput,
-  type UpdateCategoryGroupInput,
-  type UpdateCategoryInput,
-} from '@fluxo/shared';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { PencilIcon, PlusIcon } from 'lucide-react';
-import { Controller, useForm, useWatch } from 'react-hook-form';
+import { PencilIcon } from 'lucide-react';
 import {
   useCategoryGroups,
-  useCreateCategory,
-  useCreateCategoryGroup,
   useDeleteCategory,
   useDeleteCategoryGroup,
-  useUpdateCategory,
-  useUpdateCategoryGroup,
 } from '@/hooks/use-categories';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
+import { CategoryFormDialog } from '@/components/category-form-dialog';
+import { CategoryGroupFormDialog } from '@/components/category-group-form-dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
-import { DEFAULT_GROUP_COLOR, DEFAULT_GROUP_ICON } from '@/lib/category-group-visuals';
-import { TransactionTypeSelect } from '@/components/transaction-type-select';
-import { GroupVisualPicker } from '@/components/group-visual-picker';
 import { GroupChip } from '@/components/group-chip';
-import { CategoryGroupSelect } from '@/components/category-group-select';
-import type { Category, CategoryGroup } from '@/lib/types';
-
-function EditGroupPopover({ group }: { group: CategoryGroup }) {
-  const [open, setOpen] = useState(false);
-  const updateGroup = useUpdateCategoryGroup();
-
-  const form = useForm<UpdateCategoryGroupInput>({
-    resolver: zodResolver(updateCategoryGroupSchema),
-    defaultValues: { name: group.name, type: group.type, color: group.color, icon: group.icon },
-  });
-
-  const onSubmit = async (values: UpdateCategoryGroupInput) => {
-    await updateGroup.mutateAsync({ id: group.id, input: values });
-    setOpen(false);
-  };
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) form.reset({ name: group.name, type: group.type, color: group.color, icon: group.icon });
-      }}
-    >
-      <PopoverTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Editar grupo"
-          />
-        }
-      >
-        <PencilIcon />
-      </PopoverTrigger>
-      <PopoverContent align="end">
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-56 flex-col gap-3">
-          <Input placeholder="Nombre del grupo" {...form.register('name')} />
-          {form.formState.errors.name && (
-            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-          )}
-          <Controller
-            name="type"
-            control={form.control}
-            render={({ field }) => (
-              <TransactionTypeSelect
-                value={field.value ?? CategoryType.EXPENSE}
-                onValueChange={field.onChange}
-                triggerClassName="w-full"
-              />
-            )}
-          />
-          <GroupVisualPicker
-            color={useWatch({ control: form.control, name: 'color' }) ?? DEFAULT_GROUP_COLOR}
-            icon={useWatch({ control: form.control, name: 'icon' }) ?? DEFAULT_GROUP_ICON}
-            onColorChange={(color) => form.setValue('color', color, { shouldDirty: true })}
-            onIconChange={(icon) => form.setValue('icon', icon, { shouldDirty: true })}
-          />
-          <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
-            Guardar
-          </Button>
-        </form>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function EditCategoryPopover({ category }: { category: Category }) {
-  const [open, setOpen] = useState(false);
-  const updateCategory = useUpdateCategory();
-
-  const form = useForm<UpdateCategoryInput>({
-    resolver: zodResolver(updateCategorySchema),
-    defaultValues: { name: category.name },
-  });
-
-  const onSubmit = async (values: UpdateCategoryInput) => {
-    await updateCategory.mutateAsync({ id: category.id, input: values });
-    setOpen(false);
-  };
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) form.reset({ name: category.name });
-      }}
-    >
-      <PopoverTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Editar categoría"
-          />
-        }
-      >
-        <PencilIcon />
-      </PopoverTrigger>
-      <PopoverContent align="end">
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-56 flex-col gap-3">
-          <Input placeholder="Nombre de la categoría" {...form.register('name')} />
-          {form.formState.errors.name && (
-            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-          )}
-          <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
-            Guardar
-          </Button>
-        </form>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export default function CategoriesPage() {
   const { data: groups, isLoading, isError } = useCategoryGroups();
-  const createGroup = useCreateCategoryGroup();
   const deleteGroup = useDeleteCategoryGroup();
-  const createCategory = useCreateCategory();
   const deleteCategory = useDeleteCategory();
-
-  const groupForm = useForm<CreateCategoryGroupInput>({
-    resolver: zodResolver(createCategoryGroupSchema),
-    defaultValues: {
-      type: CategoryType.EXPENSE,
-      color: DEFAULT_GROUP_COLOR,
-      icon: DEFAULT_GROUP_ICON,
-      sortOrder: 0,
-    },
-  });
-
-  const categoryForm = useForm<CreateCategoryInput>({
-    resolver: zodResolver(createCategorySchema),
-    defaultValues: { groupId: '', sortOrder: 0 },
-  });
-
-  const onCreateGroup = async (values: CreateCategoryGroupInput) => {
-    await createGroup.mutateAsync(values);
-    groupForm.reset({
-      name: '',
-      type: CategoryType.EXPENSE,
-      color: DEFAULT_GROUP_COLOR,
-      icon: DEFAULT_GROUP_ICON,
-      sortOrder: 0,
-    });
-  };
-
-  const onCreateCategory = async (values: CreateCategoryInput) => {
-    await createCategory.mutateAsync(values);
-    categoryForm.reset({ groupId: values.groupId, name: '', sortOrder: 0 });
-  };
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Categorías" description="Grupos de ingreso/egreso y sus subcategorías." />
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nuevo grupo</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={groupForm.handleSubmit(onCreateGroup)} className="flex flex-col gap-3">
-              <Input placeholder="Nombre del grupo" {...groupForm.register('name')} />
-              {groupForm.formState.errors.name && (
-                <p className="text-sm text-destructive">{groupForm.formState.errors.name.message}</p>
-              )}
-              <Controller
-                name="type"
-                control={groupForm.control}
-                render={({ field }) => (
-                  <TransactionTypeSelect
-                    value={field.value ?? CategoryType.EXPENSE}
-                    onValueChange={field.onChange}
-                    triggerClassName="w-full"
-                  />
-                )}
-              />
-              <GroupVisualPicker
-                color={useWatch({ control: groupForm.control, name: 'color' }) ?? DEFAULT_GROUP_COLOR}
-                icon={useWatch({ control: groupForm.control, name: 'icon' }) ?? DEFAULT_GROUP_ICON}
-                onColorChange={(color) => groupForm.setValue('color', color, { shouldDirty: true })}
-                onIconChange={(icon) => groupForm.setValue('icon', icon, { shouldDirty: true })}
-              />
-              <Button type="submit" disabled={groupForm.formState.isSubmitting}>
-                <PlusIcon />
-                Crear grupo
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Nueva categoría</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={categoryForm.handleSubmit(onCreateCategory)} className="flex flex-col gap-3">
-              <Controller
-                name="groupId"
-                control={categoryForm.control}
-                render={({ field }) => (
-                  <CategoryGroupSelect
-                    groups={groups}
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    triggerClassName="w-full"
-                  />
-                )}
-              />
-              {categoryForm.formState.errors.groupId && (
-                <p className="text-sm text-destructive">{categoryForm.formState.errors.groupId.message}</p>
-              )}
-              <Input placeholder="Nombre de la categoría" {...categoryForm.register('name')} />
-              {categoryForm.formState.errors.name && (
-                <p className="text-sm text-destructive">{categoryForm.formState.errors.name.message}</p>
-              )}
-              <Button type="submit" disabled={categoryForm.formState.isSubmitting}>
-                <PlusIcon />
-                Crear categoría
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+      <PageHeader
+        title="Categorías"
+        description="Grupos de ingreso/egreso y sus subcategorías."
+        action={
+          <div className="flex items-center gap-2">
+            <CategoryFormDialog />
+            <CategoryGroupFormDialog trigger={<Button type="button" variant="outline">Nuevo grupo</Button>} />
+          </div>
+        }
+      />
 
       {isLoading && (
         <div className="flex flex-col gap-2">
@@ -278,7 +44,16 @@ export default function CategoriesPage() {
         </div>
       )}
       {isError && <QueryError message="No se pudieron cargar tus categorías." />}
-      {groups && groups.length === 0 && <EmptyState message="Aún no tienes grupos de categorías." />}
+      {groups && groups.length === 0 && (
+        <EmptyState
+          message="Aún no tienes grupos de categorías."
+          action={
+            <CategoryGroupFormDialog
+              trigger={<Button type="button" variant="outline">Crear el primero</Button>}
+            />
+          }
+        />
+      )}
 
       <div className="flex flex-col gap-4">
         {groups?.map((group) => (
@@ -299,7 +74,20 @@ export default function CategoriesPage() {
                 })()}
               </div>
               <div className="flex items-center gap-1">
-                <EditGroupPopover group={group} />
+                <CategoryGroupFormDialog
+                  group={group}
+                  trigger={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label="Editar grupo"
+                    >
+                      <PencilIcon />
+                    </Button>
+                  }
+                />
                 <ConfirmDeleteButton
                   aria-label="Eliminar grupo"
                   description="Este grupo y sus categorías se eliminarán de forma permanente. Esta acción no se puede deshacer."
@@ -312,7 +100,20 @@ export default function CategoriesPage() {
                 <div key={category.id} className="flex items-center justify-between px-4 py-2">
                   <span className="text-sm">{category.name}</span>
                   <div className="flex items-center gap-1">
-                    <EditCategoryPopover category={category} />
+                    <CategoryFormDialog
+                      category={category}
+                      trigger={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-foreground"
+                          aria-label="Editar categoría"
+                        >
+                          <PencilIcon />
+                        </Button>
+                      }
+                    />
                     <ConfirmDeleteButton
                       aria-label="Eliminar categoría"
                       description="Esta categoría se eliminará de forma permanente. Esta acción no se puede deshacer."

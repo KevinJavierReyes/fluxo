@@ -59,6 +59,7 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
+  footer,
   side = "bottom",
   sideOffset = 4,
   align = "center",
@@ -69,7 +70,10 @@ function SelectContent({
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-  >) {
+  > & {
+    /** Contenido fijo al final del popup, fuera de la lista de items (p.ej. un CTA "+ Crear"). */
+    footer?: React.ReactNode
+  }) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -89,6 +93,7 @@ function SelectContent({
           <SelectScrollUpButton />
           <SelectPrimitive.List>{children}</SelectPrimitive.List>
           <SelectScrollDownButton />
+          {footer}
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>
     </SelectPrimitive.Portal>

@@ -21,7 +21,16 @@ export function useCreateCategoryGroup() {
   return useMutation({
     mutationFn: (input: CreateCategoryGroupInput) =>
       apiClient.post<CategoryGroup>('/categories/groups', input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.categoryGroups }),
+    onSuccess: (created) => {
+      // Escribe el grupo recién creado en la caché de inmediato (la respuesta de POST no
+      // trae `categories`, así que se completa vacío) para que quien lo esté esperando
+      // -p.ej. seleccionarlo justo después de crearlo desde un "+ Crear grupo"- no dependa
+      // del round-trip del refetch de invalidateQueries.
+      queryClient.setQueryData<CategoryGroup[]>(queryKeys.categoryGroups, (old) =>
+        old ? [...old, { ...created, categories: [] }] : old,
+      );
+      queryClient.invalidateQueries({ queryKey: queryKeys.categoryGroups });
+    },
   });
 }
 

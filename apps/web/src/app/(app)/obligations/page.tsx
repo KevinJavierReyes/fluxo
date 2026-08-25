@@ -1,14 +1,10 @@
 'use client';
 
-import { createObligationSchema, type CreateObligationInput } from '@fluxo/shared';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircle2Icon, PlusIcon } from 'lucide-react';
+import { CheckCircle2Icon, PencilIcon } from 'lucide-react';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategoryGroups } from '@/hooks/use-categories';
 import {
-  useCreateObligation,
   useDeleteObligation,
   useLinkObligationRecurring,
   useObligations,
@@ -19,11 +15,11 @@ import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { InlineActionRow } from '@/components/inline-action-row';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
+import { ObligationFormDialog } from '@/components/obligation-form-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CategorySelect } from '@/components/category-select';
@@ -97,83 +93,16 @@ function LinkRecurringRow({ obligationId }: { obligationId: string }) {
 
 export default function ObligationsPage() {
   const { data: obligations, isLoading, isError } = useObligations();
-  const createObligation = useCreateObligation();
   const updateObligation = useUpdateObligation();
   const deleteObligation = useDeleteObligation();
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateObligationInput>({
-    resolver: zodResolver(createObligationSchema),
-  });
-
-  const onSubmit = async (values: CreateObligationInput) => {
-    await createObligation.mutateAsync(values);
-    reset({});
-  };
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Obligaciones"
         description="Todas tus deudas en un solo lugar, para priorizar cuál atacar primero."
+        action={<ObligationFormDialog />}
       />
-
-      <Card>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>¿A quién le debes?</Label>
-              <Input {...register('creditorName')} />
-              {errors.creditorName && <p className="text-sm text-destructive">{errors.creditorName.message}</p>}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>¿Cuánto falta por pagar?</Label>
-              <Input type="number" step="0.01" className="w-32" {...register('totalAmount')} />
-              {errors.totalAmount && <p className="text-sm text-destructive">{errors.totalAmount.message}</p>}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>¿Cuánto pagas al mes?</Label>
-              <Input type="number" step="0.01" className="w-32" {...register('monthlyPayment')} />
-              {errors.monthlyPayment && (
-                <p className="text-sm text-destructive">{errors.monthlyPayment.message}</p>
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Meses restantes</Label>
-              <Input
-                type="number"
-                min={0}
-                className="w-24"
-                {...register('remainingMonths', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Tasa (%)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                className="w-24"
-                {...register('interestRate', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Descripción</Label>
-              <Input {...register('description')} />
-            </div>
-            <Button type="submit" disabled={isSubmitting}>
-              <PlusIcon />
-              Agregar obligación
-            </Button>
-            {createObligation.isError && (
-              <p className="w-full text-sm text-destructive">{createObligation.error.message}</p>
-            )}
-          </form>
-        </CardContent>
-      </Card>
 
       {isLoading && (
         <div className="flex flex-col gap-2">
@@ -182,7 +111,14 @@ export default function ObligationsPage() {
         </div>
       )}
       {isError && <QueryError message="No se pudieron cargar tus obligaciones." />}
-      {obligations && obligations.length === 0 && <EmptyState message="Aún no tienes obligaciones registradas." />}
+      {obligations && obligations.length === 0 && (
+        <EmptyState
+          message="Aún no tienes obligaciones registradas."
+          action={
+            <ObligationFormDialog trigger={<Button type="button" variant="outline">Agregar la primera</Button>} />
+          }
+        />
+      )}
 
       <div className="flex flex-col gap-4">
         {obligations?.map((obligation) => (
@@ -203,7 +139,7 @@ export default function ObligationsPage() {
                     <p className="text-sm text-muted-foreground">{obligation.description}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
                   <label className="flex items-center gap-1.5 text-sm">
                     <Checkbox
                       checked={obligation.isPaidOff}
@@ -213,6 +149,14 @@ export default function ObligationsPage() {
                     />
                     Pagada
                   </label>
+                  <ObligationFormDialog
+                    obligation={obligation}
+                    trigger={
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Editar obligación">
+                        <PencilIcon />
+                      </Button>
+                    }
+                  />
                   <ConfirmDeleteButton
                     aria-label="Eliminar obligación"
                     description="Esta obligación se eliminará de forma permanente. Esta acción no se puede deshacer."
