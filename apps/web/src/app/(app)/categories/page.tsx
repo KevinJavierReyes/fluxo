@@ -1,14 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import {
   CategoryType,
   createCategoryGroupSchema,
   createCategorySchema,
+  updateCategoryGroupSchema,
+  updateCategorySchema,
   type CreateCategoryGroupInput,
   type CreateCategoryInput,
+  type UpdateCategoryGroupInput,
+  type UpdateCategoryInput,
 } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusIcon } from 'lucide-react';
+import { PencilIcon, PlusIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   useCategoryGroups,
@@ -16,6 +21,8 @@ import {
   useCreateCategoryGroup,
   useDeleteCategory,
   useDeleteCategoryGroup,
+  useUpdateCategory,
+  useUpdateCategoryGroup,
 } from '@/hooks/use-categories';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
@@ -27,7 +34,126 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
+import type { Category, CategoryGroup } from '@/lib/types';
+
+function EditGroupPopover({ group }: { group: CategoryGroup }) {
+  const [open, setOpen] = useState(false);
+  const updateGroup = useUpdateCategoryGroup();
+
+  const form = useForm<UpdateCategoryGroupInput>({
+    resolver: zodResolver(updateCategoryGroupSchema),
+    defaultValues: { name: group.name, type: group.type },
+  });
+
+  const onSubmit = async (values: UpdateCategoryGroupInput) => {
+    await updateGroup.mutateAsync({ id: group.id, input: values });
+    setOpen(false);
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) form.reset({ name: group.name, type: group.type });
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Editar grupo"
+          />
+        }
+      >
+        <PencilIcon />
+      </PopoverTrigger>
+      <PopoverContent align="end">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-56 flex-col gap-3">
+          <Input placeholder="Nombre del grupo" {...form.register('name')} />
+          {form.formState.errors.name && (
+            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+          )}
+          <Controller
+            name="type"
+            control={form.control}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(value: CategoryType) => (value === CategoryType.INCOME ? 'Ingreso' : 'Egreso')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={CategoryType.EXPENSE}>Egreso</SelectItem>
+                  <SelectItem value={CategoryType.INCOME}>Ingreso</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
+            Guardar
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function EditCategoryPopover({ category }: { category: Category }) {
+  const [open, setOpen] = useState(false);
+  const updateCategory = useUpdateCategory();
+
+  const form = useForm<UpdateCategoryInput>({
+    resolver: zodResolver(updateCategorySchema),
+    defaultValues: { name: category.name },
+  });
+
+  const onSubmit = async (values: UpdateCategoryInput) => {
+    await updateCategory.mutateAsync({ id: category.id, input: values });
+    setOpen(false);
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) form.reset({ name: category.name });
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Editar categoría"
+          />
+        }
+      >
+        <PencilIcon />
+      </PopoverTrigger>
+      <PopoverContent align="end">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-56 flex-col gap-3">
+          <Input placeholder="Nombre de la categoría" {...form.register('name')} />
+          {form.formState.errors.name && (
+            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+          )}
+          <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
+            Guardar
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function CategoriesPage() {
   const { data: groups, isLoading, isError } = useCategoryGroups();
@@ -164,21 +290,27 @@ export default function CategoriesPage() {
                   );
                 })()}
               </div>
-              <ConfirmDeleteButton
-                aria-label="Eliminar grupo"
-                description="Este grupo y sus categorías se eliminarán de forma permanente. Esta acción no se puede deshacer."
-                onConfirm={() => deleteGroup.mutate(group.id)}
-              />
+              <div className="flex items-center gap-1">
+                <EditGroupPopover group={group} />
+                <ConfirmDeleteButton
+                  aria-label="Eliminar grupo"
+                  description="Este grupo y sus categorías se eliminarán de forma permanente. Esta acción no se puede deshacer."
+                  onConfirm={() => deleteGroup.mutate(group.id)}
+                />
+              </div>
             </div>
             <div className="divide-y">
               {group.categories.map((category) => (
                 <div key={category.id} className="flex items-center justify-between px-4 py-2">
                   <span className="text-sm">{category.name}</span>
-                  <ConfirmDeleteButton
-                    aria-label="Eliminar categoría"
-                    description="Esta categoría se eliminará de forma permanente. Esta acción no se puede deshacer."
-                    onConfirm={() => deleteCategory.mutate(category.id)}
-                  />
+                  <div className="flex items-center gap-1">
+                    <EditCategoryPopover category={category} />
+                    <ConfirmDeleteButton
+                      aria-label="Eliminar categoría"
+                      description="Esta categoría se eliminará de forma permanente. Esta acción no se puede deshacer."
+                      onConfirm={() => deleteCategory.mutate(category.id)}
+                    />
+                  </div>
                 </div>
               ))}
               {group.categories.length === 0 && (
