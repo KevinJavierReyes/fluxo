@@ -14,7 +14,7 @@ import {
 } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { PencilIcon, PlusIcon } from 'lucide-react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import {
   useCategoryGroups,
   useCreateCategory,
@@ -33,9 +33,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
+import { DEFAULT_GROUP_COLOR, DEFAULT_GROUP_ICON } from '@/lib/category-group-visuals';
+import { TransactionTypeSelect } from '@/components/transaction-type-select';
+import { GroupVisualPicker } from '@/components/group-visual-picker';
+import { GroupChip } from '@/components/group-chip';
+import { CategoryGroupSelect } from '@/components/category-group-select';
 import type { Category, CategoryGroup } from '@/lib/types';
 
 function EditGroupPopover({ group }: { group: CategoryGroup }) {
@@ -44,7 +48,7 @@ function EditGroupPopover({ group }: { group: CategoryGroup }) {
 
   const form = useForm<UpdateCategoryGroupInput>({
     resolver: zodResolver(updateCategoryGroupSchema),
-    defaultValues: { name: group.name, type: group.type },
+    defaultValues: { name: group.name, type: group.type, color: group.color, icon: group.icon },
   });
 
   const onSubmit = async (values: UpdateCategoryGroupInput) => {
@@ -57,7 +61,7 @@ function EditGroupPopover({ group }: { group: CategoryGroup }) {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) form.reset({ name: group.name, type: group.type });
+        if (next) form.reset({ name: group.name, type: group.type, color: group.color, icon: group.icon });
       }}
     >
       <PopoverTrigger
@@ -83,18 +87,18 @@ function EditGroupPopover({ group }: { group: CategoryGroup }) {
             name="type"
             control={form.control}
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue>
-                    {(value: CategoryType) => (value === CategoryType.INCOME ? 'Ingreso' : 'Egreso')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={CategoryType.EXPENSE}>Egreso</SelectItem>
-                  <SelectItem value={CategoryType.INCOME}>Ingreso</SelectItem>
-                </SelectContent>
-              </Select>
+              <TransactionTypeSelect
+                value={field.value ?? CategoryType.EXPENSE}
+                onValueChange={field.onChange}
+                triggerClassName="w-full"
+              />
             )}
+          />
+          <GroupVisualPicker
+            color={useWatch({ control: form.control, name: 'color' }) ?? DEFAULT_GROUP_COLOR}
+            icon={useWatch({ control: form.control, name: 'icon' }) ?? DEFAULT_GROUP_ICON}
+            onColorChange={(color) => form.setValue('color', color, { shouldDirty: true })}
+            onIconChange={(icon) => form.setValue('icon', icon, { shouldDirty: true })}
           />
           <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
             Guardar
@@ -164,7 +168,12 @@ export default function CategoriesPage() {
 
   const groupForm = useForm<CreateCategoryGroupInput>({
     resolver: zodResolver(createCategoryGroupSchema),
-    defaultValues: { type: CategoryType.EXPENSE, sortOrder: 0 },
+    defaultValues: {
+      type: CategoryType.EXPENSE,
+      color: DEFAULT_GROUP_COLOR,
+      icon: DEFAULT_GROUP_ICON,
+      sortOrder: 0,
+    },
   });
 
   const categoryForm = useForm<CreateCategoryInput>({
@@ -174,7 +183,13 @@ export default function CategoriesPage() {
 
   const onCreateGroup = async (values: CreateCategoryGroupInput) => {
     await createGroup.mutateAsync(values);
-    groupForm.reset({ name: '', type: CategoryType.EXPENSE, sortOrder: 0 });
+    groupForm.reset({
+      name: '',
+      type: CategoryType.EXPENSE,
+      color: DEFAULT_GROUP_COLOR,
+      icon: DEFAULT_GROUP_ICON,
+      sortOrder: 0,
+    });
   };
 
   const onCreateCategory = async (values: CreateCategoryInput) => {
@@ -201,18 +216,18 @@ export default function CategoriesPage() {
                 name="type"
                 control={groupForm.control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {(value: CategoryType) => (value === CategoryType.INCOME ? 'Ingreso' : 'Egreso')}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={CategoryType.EXPENSE}>Egreso</SelectItem>
-                      <SelectItem value={CategoryType.INCOME}>Ingreso</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <TransactionTypeSelect
+                    value={field.value ?? CategoryType.EXPENSE}
+                    onValueChange={field.onChange}
+                    triggerClassName="w-full"
+                  />
                 )}
+              />
+              <GroupVisualPicker
+                color={useWatch({ control: groupForm.control, name: 'color' }) ?? DEFAULT_GROUP_COLOR}
+                icon={useWatch({ control: groupForm.control, name: 'icon' }) ?? DEFAULT_GROUP_ICON}
+                onColorChange={(color) => groupForm.setValue('color', color, { shouldDirty: true })}
+                onIconChange={(icon) => groupForm.setValue('icon', icon, { shouldDirty: true })}
               />
               <Button type="submit" disabled={groupForm.formState.isSubmitting}>
                 <PlusIcon />
@@ -232,20 +247,12 @@ export default function CategoriesPage() {
                 name="groupId"
                 control={categoryForm.control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecciona un grupo">
-                        {(value: string) => groups?.find((g) => g.id === value)?.name}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groups?.map((group) => (
-                        <SelectItem key={group.id} value={group.id}>
-                          {group.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CategoryGroupSelect
+                    groups={groups}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    triggerClassName="w-full"
+                  />
                 )}
               />
               {categoryForm.formState.errors.groupId && (
@@ -278,6 +285,7 @@ export default function CategoriesPage() {
           <Card key={group.id}>
             <div className="flex items-center justify-between border-b px-4 py-3">
               <div className="flex items-center gap-2">
+                <GroupChip color={group.color} icon={group.icon} />
                 <span className="font-medium">{group.name}</span>
                 {(() => {
                   const meta = TRANSACTION_TYPE_META[group.type];

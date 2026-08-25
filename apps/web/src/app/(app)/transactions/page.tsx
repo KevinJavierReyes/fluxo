@@ -27,6 +27,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
+import { TransactionTypeSelect } from '@/components/transaction-type-select';
+import { CategorySelect } from '@/components/category-select';
+import { GroupChip } from '@/components/group-chip';
 
 function dateToUtcMidnight(date: Date): Date {
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -74,7 +77,14 @@ export default function TransactionsPage() {
     [groups],
   );
   const accountById = new Map(accounts?.map((a) => [a.id, a.name]));
-  const categoryById = new Map(categories?.map((c) => [c.id, c.name]));
+  const categoryById = new Map(
+    groups?.flatMap((group) =>
+      group.categories.map((category) => [
+        category.id,
+        { name: category.name, groupColor: group.color, groupIcon: group.icon },
+      ] as const),
+    ) ?? [],
+  );
 
   const {
     register,
@@ -258,17 +268,7 @@ export default function TransactionsPage() {
                 name="type"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue>
-                        {(value: TransactionType) => (value === TransactionType.INCOME ? 'Ingreso' : 'Egreso')}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={TransactionType.EXPENSE}>Egreso</SelectItem>
-                      <SelectItem value={TransactionType.INCOME}>Ingreso</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <TransactionTypeSelect value={field.value} onValueChange={field.onChange} triggerClassName="w-36" />
                 )}
               />
             </FormField>
@@ -299,20 +299,13 @@ export default function TransactionsPage() {
                 name="categoryId"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-52" aria-invalid={!!errors.categoryId}>
-                      <SelectValue placeholder="Selecciona">
-                        {(value: string) => categoryById.get(value)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories?.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.groupName} / {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CategorySelect
+                    groups={groups}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    triggerClassName="w-52"
+                    ariaInvalid={!!errors.categoryId}
+                  />
                 )}
               />
             </FormField>
@@ -419,7 +412,18 @@ export default function TransactionsPage() {
                       })()}
                     </TableCell>
                     <TableCell>{accountById.get(tx.accountId) ?? '—'}</TableCell>
-                    <TableCell>{categoryById.get(tx.categoryId) ?? '—'}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const cat = categoryById.get(tx.categoryId);
+                        if (!cat) return '—';
+                        return (
+                          <span className="flex items-center gap-1.5">
+                            <GroupChip color={cat.groupColor} icon={cat.groupIcon} size="sm" />
+                            {cat.name}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell>{tx.description ?? '—'}</TableCell>
                     <TableCell
                       className={`text-right font-medium ${tx.type === 'INCOME' ? 'text-success' : 'text-destructive'}`}

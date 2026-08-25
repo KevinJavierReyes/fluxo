@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CategorySelect } from '@/components/category-select';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -39,10 +40,6 @@ function LinkRecurringRow({ obligationId }: { obligationId: string }) {
   const [byMonthDay, setByMonthDay] = useState('1');
   const [startDate, setStartDate] = useState(todayStr());
   const linkRecurring = useLinkObligationRecurring();
-
-  const categories = groups?.flatMap((group) =>
-    group.categories.map((category) => ({ ...category, groupName: group.name })),
-  );
 
   return (
     <div className="flex flex-col gap-2 border-t pt-3">
@@ -76,23 +73,13 @@ function LinkRecurringRow({ obligationId }: { obligationId: string }) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={categoryId} onValueChange={(value) => setCategoryId(value ?? '')}>
-          <SelectTrigger size="sm" className="w-44">
-            <SelectValue placeholder="Categoría">
-              {(value: string) => {
-                const c = categories?.find((cat) => cat.id === value);
-                return c ? `${c.groupName} / ${c.name}` : undefined;
-              }}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {categories?.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
-                {category.groupName} / {category.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <CategorySelect
+          groups={groups}
+          value={categoryId}
+          onValueChange={(value) => setCategoryId(value ?? '')}
+          placeholder="Categoría"
+          triggerClassName="w-44"
+        />
         <Input
           type="number"
           min={1}

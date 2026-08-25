@@ -4,6 +4,8 @@ import { CategoryType } from "../enums";
 export const createCategoryGroupSchema = z.object({
   name: z.string().min(1).max(80),
   type: z.nativeEnum(CategoryType),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#6366f1"),
+  icon: z.string().min(1).max(40).default("wallet"),
   sortOrder: z.coerce.number().int().default(0),
 });
 export type CreateCategoryGroupInput = z.infer<typeof createCategoryGroupSchema>;
@@ -17,6 +19,8 @@ export const categoryGroupResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.nativeEnum(CategoryType),
+  color: z.string(),
+  icon: z.string(),
   sortOrder: z.number(),
   isArchived: z.boolean(),
   createdAt: z.coerce.date(),

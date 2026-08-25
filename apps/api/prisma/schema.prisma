@@ -61,6 +61,8 @@ model CategoryGroup {
   user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   type       CategoryType
+  color      String       @default("#6366f1")
+  icon       String       @default("wallet")
   sortOrder  Int          @default(0)
   isArchived Boolean      @default(false)
   createdAt  DateTime     @default(now())

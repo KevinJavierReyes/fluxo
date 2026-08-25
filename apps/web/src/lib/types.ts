@@ -29,6 +29,8 @@ export interface CategoryGroup {
   id: string;
   name: string;
   type: CategoryType;
+  color: string;
+  icon: string;
   sortOrder: number;
   isArchived: boolean;
   categories: Category[];

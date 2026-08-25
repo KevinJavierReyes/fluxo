@@ -16,7 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CategoryGroupSelect } from '@/components/category-group-select';
+import { GroupChip } from '@/components/group-chip';
 import { cn } from '@/lib/utils';
 
 export default function BudgetsPage() {
@@ -27,7 +28,7 @@ export default function BudgetsPage() {
   const deleteBudget = useDeleteBudget();
 
   const expenseGroups = groups?.filter((g) => g.type === 'EXPENSE');
-  const groupById = new Map(groups?.map((g) => [g.id, g.name]));
+  const groupById = new Map(groups?.map((g) => [g.id, g]));
   const statusByGroup = new Map(status?.map((s) => [s.categoryGroupId, s]));
 
   const {
@@ -59,18 +60,13 @@ export default function BudgetsPage() {
                 name="categoryGroupId"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-52">
-                      <SelectValue placeholder="Selecciona">{(value: string) => groupById.get(value)}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {expenseGroups?.map((group) => (
-                        <SelectItem key={group.id} value={group.id}>
-                          {group.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CategoryGroupSelect
+                    groups={expenseGroups}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    triggerClassName="w-52"
+                    ariaInvalid={!!errors.categoryGroupId}
+                  />
                 )}
               />
               {errors.categoryGroupId && (
@@ -118,12 +114,16 @@ export default function BudgetsPage() {
         {budgets?.map((budget) => {
           const s = statusByGroup.get(budget.categoryGroupId);
           const percent = s ? Math.min(100, s.percentUsed) : 0;
+          const group = groupById.get(budget.categoryGroupId);
           return (
             <Card key={budget.id}>
               <CardContent className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{groupById.get(budget.categoryGroupId) ?? '—'}</p>
+                    <p className="flex items-center gap-1.5 font-medium">
+                      {group && <GroupChip color={group.color} icon={group.icon} size="sm" />}
+                      {group?.name ?? '—'}
+                    </p>
                     <p className={cn('text-sm', s?.isOverBudget ? 'text-destructive' : 'text-muted-foreground')}>
                       {s
                         ? `S/ ${s.spentAmount.toFixed(2)} de S/ ${s.budgetAmount.toFixed(2)} este mes (${s.percentUsed.toFixed(0)}%)`
