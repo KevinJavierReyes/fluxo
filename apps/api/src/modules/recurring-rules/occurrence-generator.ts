@@ -36,6 +36,12 @@ export function generateOccurrenceDates(
       return generateYearly(rule, from, endBound);
     case RecurrenceFrequency.WEEKLY:
       return generateWeekly(rule, from, endBound);
+    // CUSTOM no tiene hoy ningún campo propio en el schema (sin cron, sin
+    // lista de días) más allá de `interval`, así que se comporta igual que
+    // DAILY: cada `interval` días. No es un alias accidental — es lo único
+    // que se puede interpretar con los datos disponibles. Si se agrega un
+    // patrón de recurrencia realmente distinto, este case necesita su
+    // propia función.
     case RecurrenceFrequency.DAILY:
     case RecurrenceFrequency.CUSTOM:
     default:

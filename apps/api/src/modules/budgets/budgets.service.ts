@@ -3,12 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { todayUtc } from '../../common/date.util';
+import { todayForUser } from '../../common/date.util';
+import { archivedResult } from '../../common/delete-result';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BudgetStatusQueryDto, CreateBudgetDto, UpdateBudgetDto } from './dto';
 
-function resolveMonthRange(month?: string): { start: Date; end: Date } {
-  const today = todayUtc();
+function resolveMonthRange(
+  month: string | undefined,
+  timezone: string,
+): { start: Date; end: Date } {
+  const today = todayForUser(timezone);
   const [year, monthIndex1] = month
     ? month.split('-').map(Number)
     : [today.getUTCFullYear(), today.getUTCMonth() + 1];
@@ -23,8 +27,9 @@ export class BudgetsService {
 
   findAll(userId: string) {
     return this.prisma.budget.findMany({
-      where: { userId },
+      where: { userId, isArchived: false },
       orderBy: { effectiveFrom: 'desc' },
+      take: 200,
     });
   }
 
@@ -59,18 +64,30 @@ export class BudgetsService {
     return this.findOne(userId, id);
   }
 
+  /**
+   * Nada referencia un Budget; se archiva igual que assets/obligations para
+   * conservar el historial de límites de gasto de meses pasados.
+   */
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
-    await this.prisma.budget.delete({ where: { id } });
-    return { id, deleted: true };
+    const budget = await this.prisma.budget.update({
+      where: { id },
+      data: { isArchived: true },
+    });
+    return archivedResult(id, budget);
   }
 
-  async getStatus(userId: string, query: BudgetStatusQueryDto) {
-    const { start, end } = resolveMonthRange(query.month);
+  async getStatus(
+    userId: string,
+    query: BudgetStatusQueryDto,
+    timezone: string,
+  ) {
+    const { start, end } = resolveMonthRange(query.month, timezone);
 
     const budgets = await this.prisma.budget.findMany({
       where: {
         userId,
+        isArchived: false,
         effectiveFrom: { lte: end },
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: start } }],
       },

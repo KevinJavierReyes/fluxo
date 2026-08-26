@@ -25,7 +25,7 @@ export class BudgetsController {
     @CurrentUser() user: CurrentUserPayload,
     @Query() query: BudgetStatusQueryDto,
   ) {
-    return this.budgetsService.getStatus(user.id, query);
+    return this.budgetsService.getStatus(user.id, query, user.timezone);
   }
 
   @Get()

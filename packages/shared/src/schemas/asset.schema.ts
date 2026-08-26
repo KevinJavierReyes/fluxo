@@ -10,6 +10,7 @@ export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 
 export const updateAssetSchema = createAssetSchema.partial().extend({
   isSold: z.boolean().optional(),
+  isArchived: z.boolean().optional(),
 });
 export type UpdateAssetInput = z.infer<typeof updateAssetSchema>;
 
@@ -21,6 +22,7 @@ export const assetResponseSchema = z.object({
   notes: z.string().nullable(),
   isSold: z.boolean(),
   soldAt: z.coerce.date().nullable(),
+  isArchived: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

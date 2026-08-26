@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { RecurringRule } from '@prisma/client';
 import { addDays, todayUtc } from '../../common/date.util';
+import { deletedResult } from '../../common/delete-result';
+import { CategoriesService } from '../categories/categories.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateRecurringRuleDto, UpdateRecurringRuleDto } from './dto';
 import { generateOccurrenceDates } from './occurrence-generator';
@@ -16,12 +18,16 @@ export const RECURRING_HORIZON_DAYS = 365;
 export class RecurringRulesService {
   private readonly logger = new Logger(RecurringRulesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categoriesService: CategoriesService,
+  ) {}
 
   findAll(userId: string) {
     return this.prisma.recurringRule.findMany({
       where: { userId },
       orderBy: { name: 'asc' },
+      take: 200,
     });
   }
 
@@ -35,31 +41,25 @@ export class RecurringRulesService {
     return rule;
   }
 
-  private async assertOwnership(
-    userId: string,
-    accountId?: string,
-    categoryId?: string,
-  ) {
-    if (accountId) {
-      const account = await this.prisma.account.findFirst({
-        where: { id: accountId, userId },
-      });
-      if (!account) {
-        throw new BadRequestException('La cuenta indicada no existe');
-      }
+  private async assertAccountOwnership(userId: string, accountId?: string) {
+    if (!accountId) {
+      return;
     }
-    if (categoryId) {
-      const category = await this.prisma.category.findFirst({
-        where: { id: categoryId, userId },
-      });
-      if (!category) {
-        throw new BadRequestException('La categoría indicada no existe');
-      }
+    const account = await this.prisma.account.findFirst({
+      where: { id: accountId, userId },
+    });
+    if (!account) {
+      throw new BadRequestException('La cuenta indicada no existe');
     }
   }
 
   async create(userId: string, dto: CreateRecurringRuleDto) {
-    await this.assertOwnership(userId, dto.accountId, dto.categoryId);
+    await this.assertAccountOwnership(userId, dto.accountId);
+    await this.categoriesService.assertTypeMatches(
+      userId,
+      dto.categoryId,
+      dto.type,
+    );
     const rule = await this.prisma.recurringRule.create({
       data: { ...dto, userId },
     });
@@ -69,8 +69,16 @@ export class RecurringRulesService {
 
   async update(userId: string, id: string, dto: UpdateRecurringRuleDto) {
     const existing = await this.findOne(userId, id);
-    if (dto.accountId || dto.categoryId) {
-      await this.assertOwnership(userId, dto.accountId, dto.categoryId);
+    await this.assertAccountOwnership(userId, dto.accountId);
+    if (dto.categoryId !== undefined) {
+      // El tipo de una regla recurrente no se puede editar (no está en el
+      // DTO de update), así que la categoría siempre se valida contra el
+      // tipo original de la regla.
+      await this.categoriesService.assertTypeMatches(
+        userId,
+        dto.categoryId,
+        existing.type,
+      );
     }
 
     const result = await this.prisma.recurringRule.updateMany({
@@ -91,7 +99,7 @@ export class RecurringRulesService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
     await this.prisma.recurringRule.delete({ where: { id } });
-    return { id, deleted: true };
+    return deletedResult(id);
   }
 
   /** Materializa las ocurrencias faltantes de una regla hasta el horizonte rodante. */

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { archivedResult } from '../../common/delete-result';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAssetDto, UpdateAssetDto } from './dto';
 
@@ -8,8 +9,9 @@ export class AssetsService {
 
   findAll(userId: string) {
     return this.prisma.asset.findMany({
-      where: { userId },
+      where: { userId, isArchived: false },
       orderBy: { name: 'asc' },
+      take: 200,
     });
   }
 
@@ -43,9 +45,18 @@ export class AssetsService {
     return this.findOne(userId, id);
   }
 
+  /**
+   * Los activos no tienen ninguna entidad que los referencie, pero son
+   * historial financiero del usuario: se archivan en vez de borrarse físico
+   * para no perder ese historial y para que un futuro "deshacer" (MCP) sea
+   * posible.
+   */
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
-    await this.prisma.asset.delete({ where: { id } });
-    return { id, deleted: true };
+    const asset = await this.prisma.asset.update({
+      where: { id },
+      data: { isArchived: true },
+    });
+    return archivedResult(id, asset);
   }
 }

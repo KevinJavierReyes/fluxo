@@ -4,6 +4,7 @@ import type { Request } from 'express';
 export interface CurrentUserPayload {
   id: string;
   email: string;
+  timezone: string;
 }
 
 export const CurrentUser = createParamDecorator(
