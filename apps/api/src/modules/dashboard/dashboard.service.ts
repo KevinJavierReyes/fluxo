@@ -6,7 +6,7 @@ import {
   bucketStart,
   eachBucket,
   toDateKey,
-  todayUtc,
+  todayForUser,
 } from '../../common/date.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CashflowService } from '../cashflow/cashflow.service';
@@ -29,8 +29,8 @@ export class DashboardService {
     private readonly cashflowService: CashflowService,
   ) {}
 
-  async getSummary(userId: string) {
-    const today = todayUtc();
+  async getSummary(userId: string, timezone: string) {
+    const today = todayForUser(timezone);
     const horizon = addDays(today, PROJECTION_HORIZON_DAYS);
 
     const accounts = await this.prisma.account.findMany({
@@ -79,9 +79,9 @@ export class DashboardService {
    * serie de saldo (que continúa hacia el futuro cuando el rango lo incluye),
    * movimientos por bucket y desglose por grupo de categoría.
    */
-  async getOverview(userId: string, query: OverviewQuery) {
+  async getOverview(userId: string, query: OverviewQuery, timezone: string) {
     const { from, to, granularity, accountId } = query;
-    const today = todayUtc();
+    const today = todayForUser(timezone);
 
     const accounts = await this.prisma.account.findMany({
       where: { userId, isArchived: false },
@@ -94,7 +94,7 @@ export class DashboardService {
       accounts.map(async (account) => ({
         id: account.id,
         name: account.name,
-        type: account.type as string,
+        type: account.type,
         balance: await this.cashflowService.getBalanceAt(
           userId,
           today,
@@ -104,12 +104,11 @@ export class DashboardService {
     );
     const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
 
-    const balanceSeries = await this.cashflowService.getBalanceSeries(userId, {
-      from,
-      to,
-      granularity,
-      accountId,
-    });
+    const balanceSeries = await this.cashflowService.getBalanceSeries(
+      userId,
+      { from, to, granularity, accountId },
+      timezone,
+    );
 
     const transactions = await this.prisma.transaction.findMany({
       where: this.buildTransactionWhere(userId, query),

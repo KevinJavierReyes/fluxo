@@ -13,7 +13,7 @@ export class DashboardController {
 
   @Get('summary')
   getSummary(@CurrentUser() user: CurrentUserPayload) {
-    return this.dashboardService.getSummary(user.id);
+    return this.dashboardService.getSummary(user.id, user.timezone);
   }
 
   @Get('overview')
@@ -21,6 +21,6 @@ export class DashboardController {
     @CurrentUser() user: CurrentUserPayload,
     @Query() query: OverviewQueryDto,
   ) {
-    return this.dashboardService.getOverview(user.id, query);
+    return this.dashboardService.getOverview(user.id, query, user.timezone);
   }
 }

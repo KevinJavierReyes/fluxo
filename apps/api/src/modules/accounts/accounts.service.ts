@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { archivedResult, deletedResult } from '../../common/delete-result';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto';
 
@@ -10,6 +11,7 @@ export class AccountsService {
     return this.prisma.account.findMany({
       where: { userId, isArchived: false },
       orderBy: { name: 'asc' },
+      take: 200,
     });
   }
 
@@ -41,18 +43,31 @@ export class AccountsService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
 
-    const transactionCount = await this.prisma.transaction.count({
-      where: { accountId: id, userId },
-    });
+    // RecurringRule y ExpenseTemplate ahora tienen FK real hacia Account
+    // (Restrict/SetNull); si hay referencias, archivar en vez de intentar un
+    // borrado físico que la base rechazaría.
+    const [transactionCount, recurringRuleCount, expenseTemplateCount] =
+      await Promise.all([
+        this.prisma.transaction.count({ where: { accountId: id, userId } }),
+        this.prisma.recurringRule.count({ where: { accountId: id, userId } }),
+        this.prisma.expenseTemplate.count({
+          where: { accountId: id, userId },
+        }),
+      ]);
 
-    if (transactionCount > 0) {
-      return this.prisma.account.update({
+    if (
+      transactionCount > 0 ||
+      recurringRuleCount > 0 ||
+      expenseTemplateCount > 0
+    ) {
+      const account = await this.prisma.account.update({
         where: { id },
         data: { isArchived: true },
       });
+      return archivedResult(id, account);
     }
 
     await this.prisma.account.delete({ where: { id } });
-    return { id, deleted: true };
+    return deletedResult(id);
   }
 }

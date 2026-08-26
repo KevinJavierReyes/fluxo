@@ -18,6 +18,7 @@ export const contributeSavingsGoalSchema = z.object({
   amount: z.coerce.number().positive(),
   date: z.coerce.date(),
   description: z.string().max(280).optional(),
+  clientRequestId: z.string().min(1).max(100).optional(),
 });
 export type ContributeSavingsGoalInput = z.infer<typeof contributeSavingsGoalSchema>;
 

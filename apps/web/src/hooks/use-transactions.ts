@@ -4,15 +4,33 @@ import { apiClient } from '@/lib/api-client';
 import { queryKeys } from '@/lib/query-keys';
 import type { Transaction } from '@/lib/types';
 
+interface PaginatedTransactions {
+  items: Transaction[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+// La API pagina /transactions por cursor. La página de transacciones no
+// implementa "cargar más" todavía, así que se pide el límite máximo (200)
+// para preservar el comportamiento anterior de "traer todo" en la mayoría
+// de los casos; con más de 200 movimientos en el rango, la lista se trunca.
+const MAX_PAGE_SIZE = 200;
+
 export function useTransactions(filters?: { accountId?: string; categoryId?: string }) {
   const params = new URLSearchParams();
   if (filters?.accountId) params.set('accountId', filters.accountId);
   if (filters?.categoryId) params.set('categoryId', filters.categoryId);
+  params.set('limit', String(MAX_PAGE_SIZE));
   const query = params.toString();
 
   return useQuery({
     queryKey: queryKeys.transactions(filters),
-    queryFn: () => apiClient.get<Transaction[]>(`/transactions${query ? `?${query}` : ''}`),
+    queryFn: async () => {
+      const page = await apiClient.get<PaginatedTransactions>(
+        `/transactions${query ? `?${query}` : ''}`,
+      );
+      return page.items;
+    },
   });
 }
 

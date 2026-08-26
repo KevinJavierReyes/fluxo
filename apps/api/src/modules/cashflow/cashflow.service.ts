@@ -3,7 +3,7 @@ import { TransactionType } from '@prisma/client';
 import {
   bucketStart,
   eachBucket,
-  todayUtc,
+  todayForUser,
   type Granularity,
 } from '../../common/date.util';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -60,7 +60,11 @@ export class CashflowService {
       by: ['date', 'type'],
       where: {
         userId,
-        ...(accountId ? { accountId } : {}),
+        // Mismo criterio que getBalanceAt/getBalanceSeries: si no se filtra
+        // por cuenta, excluir las archivadas — si no, el saldo inicial (que
+        // sí las excluye) y los deltas (que antes las incluían) quedaban
+        // calculados con criterios distintos y la proyección no cuadraba.
+        ...(accountId ? { accountId } : { account: { isArchived: false } }),
         date: { gte: from, lte: to },
       },
       _sum: { amount: true },
@@ -122,6 +126,7 @@ export class CashflowService {
       granularity,
       accountId,
     }: { from: Date; to: Date; granularity: Granularity; accountId?: string },
+    timezone: string,
   ): Promise<CashflowBalanceBucket[]> {
     const buckets = eachBucket(from, to, granularity);
     if (buckets.length === 0) {
@@ -159,7 +164,7 @@ export class CashflowService {
       byBucket.set(key, entry);
     }
 
-    const today = todayUtc();
+    const today = todayForUser(timezone);
     const todayBucket = bucketStart(today, granularity).getTime();
 
     let running = openingBalance;
@@ -196,9 +201,7 @@ export class CashflowService {
     // Las cuentas archivadas son borrados suaves: no cuentan para el saldo, ni
     // con su saldo inicial ni con sus movimientos. Así el total, las tarjetas de
     // wallets y la curva de saldo hablan siempre del mismo conjunto de cuentas.
-    const accountFilter = accountId
-      ? { id: accountId }
-      : { isArchived: false };
+    const accountFilter = accountId ? { id: accountId } : { isArchived: false };
 
     const accounts = await this.prisma.account.findMany({
       where: { userId, ...accountFilter },

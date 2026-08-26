@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppController } from './app.controller';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { DecimalToNumberInterceptor } from './common/interceptors/decimal-to-number.interceptor';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -14,6 +15,10 @@ import { CashflowModule } from './modules/cashflow/cashflow.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ExpenseTemplatesModule } from './modules/expense-templates/expense-templates.module';
+import { McpModule } from './modules/mcp/mcp.module';
+import { McpSettingsModule } from './modules/mcp-settings/mcp-settings.module';
+import { NetWorthModule } from './modules/net-worth/net-worth.module';
+import { OAuthModule } from './modules/oauth/oauth.module';
 import { ObligationsModule } from './modules/obligations/obligations.module';
 import { RecurringRulesModule } from './modules/recurring-rules/recurring-rules.module';
 import { SavingsGoalsModule } from './modules/savings-goals/savings-goals.module';
@@ -37,12 +42,17 @@ import { PrismaModule } from './prisma/prisma.module';
     BudgetsModule,
     ObligationsModule,
     AssetsModule,
+    NetWorthModule,
+    OAuthModule,
+    McpModule,
+    McpSettingsModule,
   ],
   controllers: [AppController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_FILTER, useClass: PrismaExceptionFilter },
+    { provide: APP_INTERCEPTOR, useClass: DecimalToNumberInterceptor },
   ],
 })
 export class AppModule {}

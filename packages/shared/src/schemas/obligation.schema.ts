@@ -12,6 +12,7 @@ export type CreateObligationInput = z.infer<typeof createObligationSchema>;
 
 export const updateObligationSchema = createObligationSchema.partial().extend({
   isPaidOff: z.boolean().optional(),
+  isArchived: z.boolean().optional(),
 });
 export type UpdateObligationInput = z.infer<typeof updateObligationSchema>;
 
@@ -33,6 +34,7 @@ export const obligationResponseSchema = z.object({
   description: z.string().nullable(),
   isPaidOff: z.boolean(),
   linkedRecurringRuleId: z.string().nullable(),
+  isArchived: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

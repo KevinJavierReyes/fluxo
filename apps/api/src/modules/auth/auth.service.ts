@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { DEFAULT_CATEGORY_GROUPS } from '@fluxo/shared';
+import { isValidTimezone } from '../../common/date.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { UpdateUserDto } from './dto';
 
 @Injectable()
 export class AuthService {
@@ -49,5 +51,33 @@ export class AuthService {
       },
       { timeout: 15000 },
     );
+  }
+
+  getMe(userId: string) {
+    return this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  }
+
+  updateMe(userId: string, dto: UpdateUserDto) {
+    if (dto.timezone !== undefined && !isValidTimezone(dto.timezone)) {
+      throw new BadRequestException(
+        `"${dto.timezone}" no es una zona horaria IANA válida (ej. "America/Lima").`,
+      );
+    }
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
+        ...(dto.mcpEnabled !== undefined ? { mcpEnabled: dto.mcpEnabled } : {}),
+        ...(dto.mcpMaxTransactionAmount !== undefined
+          ? { mcpMaxTransactionAmount: dto.mcpMaxTransactionAmount }
+          : {}),
+        ...(dto.mcpAllowDelete !== undefined
+          ? { mcpAllowDelete: dto.mcpAllowDelete }
+          : {}),
+        ...(dto.mcpAllowConfigWrite !== undefined
+          ? { mcpAllowConfigWrite: dto.mcpAllowConfigWrite }
+          : {}),
+      },
+    });
   }
 }

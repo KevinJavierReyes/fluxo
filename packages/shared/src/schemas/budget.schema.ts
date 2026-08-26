@@ -11,6 +11,7 @@ export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 export const updateBudgetSchema = z.object({
   amount: z.coerce.number().positive().optional(),
   effectiveTo: z.coerce.date().optional(),
+  isArchived: z.boolean().optional(),
 });
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 
@@ -20,6 +21,7 @@ export const budgetResponseSchema = z.object({
   amount: z.number(),
   effectiveFrom: z.coerce.date(),
   effectiveTo: z.coerce.date().nullable(),
+  isArchived: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

@@ -22,6 +22,8 @@ export const TransactionSource = {
   MANUAL: "MANUAL",
   RECURRING: "RECURRING",
   TEMPLATE: "TEMPLATE",
+  SAVINGS: "SAVINGS",
+  MCP: "MCP",
 } as const;
 export type TransactionSource = (typeof TransactionSource)[keyof typeof TransactionSource];
 

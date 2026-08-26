@@ -20,6 +20,7 @@ export const applyExpenseTemplateSchema = z.object({
   amount: z.coerce.number().positive().optional(),
   accountId: z.string().min(1).optional(),
   description: z.string().max(280).optional(),
+  clientRequestId: z.string().min(1).max(100).optional(),
 });
 export type ApplyExpenseTemplateInput = z.infer<typeof applyExpenseTemplateSchema>;
 

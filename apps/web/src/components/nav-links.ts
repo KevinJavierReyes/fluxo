@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   type LucideIcon,
   PiggyBank,
+  Plug,
   Repeat,
   Tags,
   Target,
@@ -29,4 +30,5 @@ export const NAV_LINKS: NavLink[] = [
   { href: '/budgets', label: 'Presupuestos', icon: Target },
   { href: '/obligations', label: 'Obligaciones', icon: CreditCard },
   { href: '/assets', label: 'Activos', icon: Landmark },
+  { href: '/settings/integrations', label: 'Integraciones', icon: Plug },
 ];

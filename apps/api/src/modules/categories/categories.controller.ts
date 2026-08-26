@@ -29,6 +29,12 @@ export class CategoriesController {
     return this.categoriesService.findAllGroups(user.id);
   }
 
+  /** Lista plana de categorías (sin agrupar). Útil para resolver por nombre. */
+  @Get()
+  findAllFlat(@CurrentUser() user: CurrentUserPayload) {
+    return this.categoriesService.findAllFlat(user.id);
+  }
+
   @Post('groups')
   createGroup(
     @CurrentUser() user: CurrentUserPayload,

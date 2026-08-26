@@ -5,6 +5,49 @@ export function todayUtc(): Date {
   );
 }
 
+/**
+ * "Hoy" en la zona horaria del usuario, representado como medianoche UTC del
+ * día civil correspondiente — igual convención que el resto del módulo, para
+ * poder compararse directamente con columnas `@db.Date`.
+ *
+ * Sin esto, un usuario en UTC-5 a las 20:00 ya está "mañana" según
+ * `todayUtc()`, y una transacción registrada "hoy" cae en el día equivocado.
+ */
+export function todayForUser(timezone: string): Date {
+  const { year, month, day } = civilDateInTimezone(new Date(), timezone);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+export function startOfMonthForUser(timezone: string): Date {
+  const { year, month } = civilDateInTimezone(new Date(), timezone);
+  return new Date(Date.UTC(year, month - 1, 1));
+}
+
+function civilDateInTimezone(
+  date: Date,
+  timezone: string,
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value);
+  return { year: get('year'), month: get('month'), day: get('day') };
+}
+
+/** Valida que un string sea una zona horaria IANA reconocida por el runtime. */
+export function isValidTimezone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setUTCDate(result.getUTCDate() + days);
