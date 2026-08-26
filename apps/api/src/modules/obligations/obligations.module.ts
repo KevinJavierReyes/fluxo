@@ -7,5 +7,6 @@ import { ObligationsService } from './obligations.service';
   imports: [RecurringRulesModule],
   controllers: [ObligationsController],
   providers: [ObligationsService],
+  exports: [ObligationsService],
 })
 export class ObligationsModule {}
