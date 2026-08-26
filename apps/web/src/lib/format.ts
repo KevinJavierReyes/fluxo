@@ -35,3 +35,14 @@ export function formatLongDate(value: string | Date) {
     year: 'numeric',
   });
 }
+
+/** Para timestamps reales (createdAt, lastUsedAt) — a diferencia de formatDate/formatLongDate, estos sí son un instante real y se muestran en la zona horaria del navegador. */
+export function formatDateTime(value: string | Date) {
+  return new Date(value).toLocaleString('es-PE', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}

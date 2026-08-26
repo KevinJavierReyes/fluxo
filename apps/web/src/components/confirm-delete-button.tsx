@@ -20,6 +20,7 @@ interface ConfirmDeleteButtonProps {
   description?: string;
   disabled?: boolean;
   'aria-label'?: string;
+  confirmLabel?: string;
 }
 
 export function ConfirmDeleteButton({
@@ -28,6 +29,7 @@ export function ConfirmDeleteButton({
   description = 'Esta acción no se puede deshacer.',
   disabled,
   'aria-label': ariaLabel = 'Eliminar',
+  confirmLabel = 'Eliminar',
 }: ConfirmDeleteButtonProps) {
   return (
     <AlertDialog>
@@ -52,7 +54,7 @@ export function ConfirmDeleteButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Eliminar</AlertDialogAction>
+          <AlertDialogAction onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

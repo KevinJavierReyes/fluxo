@@ -12,5 +12,7 @@ export * from "./schemas/asset.schema";
 export * from "./schemas/cashflow.schema";
 export * from "./schemas/dashboard.schema";
 export * from "./schemas/overview.schema";
+export * from "./schemas/user.schema";
+export * from "./schemas/mcp-settings.schema";
 
 export * from "./seed-data/default-categories";

@@ -1,5 +1,7 @@
 // Tipos del lado del cliente que reflejan la forma real de la respuesta JSON
-// de la API (los Decimal de Prisma serializan como string, no number).
+// de la API. Los Decimal de Prisma se convierten a number en el borde de la
+// API (ver DecimalToNumberInterceptor), así que todos los montos llegan como
+// number — igual que los endpoints calculados (dashboard, cashflow).
 
 import type {
   AccountType,
@@ -13,7 +15,7 @@ export interface Account {
   id: string;
   name: string;
   type: AccountType;
-  openingBalance: string;
+  openingBalance: number;
   openingBalanceDate: string;
   isArchived: boolean;
 }
@@ -62,10 +64,10 @@ export interface Transaction {
   accountId: string;
   categoryId: string;
   type: TransactionType;
-  amount: string;
+  amount: number;
   date: string;
   description: string | null;
-  source: 'MANUAL' | 'RECURRING' | 'TEMPLATE';
+  source: 'MANUAL' | 'RECURRING' | 'TEMPLATE' | 'SAVINGS' | 'MCP';
 }
 
 export interface RecurringRule {
@@ -74,7 +76,7 @@ export interface RecurringRule {
   accountId: string;
   categoryId: string;
   type: TransactionType;
-  amount: string;
+  amount: number;
   description: string | null;
   frequency: RecurrenceFrequency;
   interval: number;
@@ -89,7 +91,7 @@ export interface RecurringRule {
 export interface ExpenseTemplate {
   id: string;
   name: string;
-  suggestedAmount: string | null;
+  suggestedAmount: number | null;
   accountId: string | null;
   categoryId: string;
   type: TransactionType;
@@ -99,7 +101,7 @@ export interface ExpenseTemplate {
 export interface SavingsGoal {
   id: string;
   name: string;
-  targetAmount: string;
+  targetAmount: number;
   targetDate: string | null;
   isArchived: boolean;
   progress: number;
@@ -108,9 +110,10 @@ export interface SavingsGoal {
 export interface Budget {
   id: string;
   categoryGroupId: string;
-  amount: string;
+  amount: number;
   effectiveFrom: string;
   effectiveTo: string | null;
+  isArchived: boolean;
 }
 
 export interface BudgetStatus {
@@ -126,23 +129,74 @@ export interface BudgetStatus {
 export interface Obligation {
   id: string;
   creditorName: string;
-  totalAmount: string;
-  monthlyPayment: string;
+  totalAmount: number;
+  monthlyPayment: number;
   remainingMonths: number | null;
-  interestRate: string | null;
+  interestRate: number | null;
   description: string | null;
   isPaidOff: boolean;
   linkedRecurringRuleId: string | null;
+  isArchived: boolean;
 }
 
 export interface Asset {
   id: string;
   name: string;
-  estimatedValue: string;
+  estimatedValue: number;
   maxSaleTimeDays: number | null;
   notes: string | null;
   isSold: boolean;
   soldAt: string | null;
+  isArchived: boolean;
+}
+
+export interface Me {
+  id: string;
+  email: string;
+  timezone: string;
+  mcpEnabled: boolean;
+  mcpMaxTransactionAmount: number | null;
+  mcpAllowDelete: boolean;
+  mcpAllowConfigWrite: boolean;
+}
+
+export interface McpConnection {
+  clientId: string;
+  clientName: string;
+  clientUri: string | null;
+  logoUri: string | null;
+  scopes: string[];
+  connectedAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface McpPat {
+  id: string;
+  name: string | null;
+  prefix: string;
+  scopes: string[];
+  createdAt: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+}
+
+export interface CreatedMcpPat extends McpPat {
+  /** Solo viene en la respuesta de creación — no se puede volver a consultar después. */
+  token: string;
+}
+
+export interface McpActivityEntry {
+  id: string;
+  tool: string;
+  status: 'OK' | 'ERROR' | 'DENIED';
+  errorCode: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  clientName: string | null;
+  durationMs: number | null;
+  undoneAt: string | null;
+  canUndo: boolean;
+  createdAt: string;
 }
 
 export interface OverviewWallet {

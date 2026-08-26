@@ -5,4 +5,8 @@ export const queryKeys = {
     ['transactions', filters ?? {}] as const,
   overview: (params?: Record<string, string | undefined>) =>
     ['overview', params ?? {}] as const,
+  me: ['me'] as const,
+  mcpConnections: ['mcp-connections'] as const,
+  mcpPats: ['mcp-pats'] as const,
+  mcpActivity: ['mcp-activity'] as const,
 };
