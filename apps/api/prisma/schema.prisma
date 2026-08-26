@@ -9,20 +9,33 @@ datasource db {
 }
 
 model User {
-  id        String   @id @db.Uuid
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @db.Uuid
+  email      String   @unique
+  timezone   String   @default("UTC")
+  mcpEnabled Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  accounts         Account[]
-  categoryGroups   CategoryGroup[]
-  transactions     Transaction[]
-  recurringRules   RecurringRule[]
-  expenseTemplates ExpenseTemplate[]
-  savingsGoals     SavingsGoal[]
-  budgets          Budget[]
-  obligations      Obligation[]
-  assets           Asset[]
+  // Política anti-desastre para escrituras vía MCP. Un límite ausente
+  // (null) significa "sin límite" — el usuario lo configura explícitamente
+  // más restrictivo desde la web si quiere.
+  mcpMaxTransactionAmount Decimal? @db.Decimal(14, 2)
+  mcpAllowDelete          Boolean  @default(false)
+  mcpAllowConfigWrite     Boolean  @default(true)
+
+  accounts                Account[]
+  categoryGroups          CategoryGroup[]
+  categories              Category[]
+  transactions            Transaction[]
+  recurringRules          RecurringRule[]
+  expenseTemplates        ExpenseTemplate[]
+  savingsGoals            SavingsGoal[]
+  budgets                 Budget[]
+  obligations             Obligation[]
+  assets                  Asset[]
+  oauthAuthorizationCodes OAuthAuthorizationCode[]
+  mcpTokens               McpToken[]
+  mcpAuditLogs            McpAuditLog[]
 }
 
 enum AccountType {
@@ -44,7 +57,9 @@ model Account {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  transactions Transaction[]
+  transactions     Transaction[]
+  recurringRules   RecurringRule[]
+  expenseTemplates ExpenseTemplate[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -78,6 +93,7 @@ model CategoryGroup {
 model Category {
   id         String        @id @default(cuid())
   userId     String        @db.Uuid
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   groupId    String
   group      CategoryGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   name       String
@@ -86,7 +102,9 @@ model Category {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
-  transactions Transaction[]
+  transactions     Transaction[]
+  recurringRules   RecurringRule[]
+  expenseTemplates ExpenseTemplate[]
 
   @@unique([groupId, name])
   @@index([userId])
@@ -101,6 +119,8 @@ enum TransactionSource {
   MANUAL
   RECURRING
   TEMPLATE
+  SAVINGS
+  MCP
 }
 
 model Transaction {
@@ -114,11 +134,16 @@ model Transaction {
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   type        TransactionType
-  amount      Decimal         @db.Decimal(14, 2)
-  date        DateTime        @db.Date
+  amount      Decimal           @db.Decimal(14, 2)
+  date        DateTime          @db.Date
   description String?
   source      TransactionSource @default(MANUAL)
-  isModified  Boolean         @default(false)
+  isModified  Boolean           @default(false)
+
+  // Identificador que el cliente (típicamente un agente MCP) genera para
+  // esta operación; si reintenta con el mismo id, el unique constraint de
+  // abajo evita duplicar la transacción en vez de crear una segunda.
+  clientRequestId String?
 
   recurringRuleId   String?
   recurringRule     RecurringRule?   @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
@@ -130,9 +155,12 @@ model Transaction {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, clientRequestId])
   @@index([userId, date])
   @@index([accountId, date])
+  @@index([categoryId])
   @@index([recurringRuleId])
+  @@index([expenseTemplateId])
   @@index([savingsGoalId])
 }
 
@@ -149,24 +177,28 @@ model RecurringRule {
   userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name        String
-  accountId   String
-  categoryId  String
+  name       String
+  accountId  String
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
   type        TransactionType
-  amount      Decimal             @db.Decimal(14, 2)
+  amount      Decimal         @db.Decimal(14, 2)
   description String?
 
-  frequency   RecurrenceFrequency
-  interval    Int                 @default(1)
-  byMonthDay  Int?
-  byWeekday   Int?
-  startDate   DateTime            @db.Date
-  endDate     DateTime?           @db.Date
+  frequency  RecurrenceFrequency
+  interval   Int                 @default(1)
+  byMonthDay Int?
+  byWeekday  Int?
+  startDate  DateTime            @db.Date
+  endDate    DateTime?           @db.Date
 
   isActive           Boolean   @default(true)
   lastGeneratedUntil DateTime? @db.Date
 
-  occurrences Transaction[]
+  occurrences         Transaction[]
+  linkedByObligations Obligation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -182,7 +214,9 @@ model ExpenseTemplate {
   name            String
   suggestedAmount Decimal?        @db.Decimal(14, 2)
   accountId       String?
+  account         Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
   categoryId      String
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   type            TransactionType @default(EXPENSE)
   isArchived      Boolean         @default(false)
 
@@ -222,6 +256,7 @@ model Budget {
   amount          Decimal       @db.Decimal(14, 2)
   effectiveFrom   DateTime      @db.Date
   effectiveTo     DateTime?     @db.Date
+  isArchived      Boolean       @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -236,13 +271,15 @@ model Obligation {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   creditorName          String
-  totalAmount           Decimal  @db.Decimal(14, 2)
-  monthlyPayment        Decimal  @db.Decimal(14, 2)
+  totalAmount           Decimal        @db.Decimal(14, 2)
+  monthlyPayment        Decimal        @db.Decimal(14, 2)
   remainingMonths       Int?
-  interestRate          Decimal? @db.Decimal(5, 2)
+  interestRate          Decimal?       @db.Decimal(5, 2)
   description           String?
-  isPaidOff              Boolean  @default(false)
+  isPaidOff             Boolean        @default(false)
   linkedRecurringRuleId String?
+  linkedRecurringRule   RecurringRule? @relation(fields: [linkedRecurringRuleId], references: [id], onDelete: SetNull)
+  isArchived            Boolean        @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -261,9 +298,147 @@ model Asset {
   notes           String?
   isSold          Boolean   @default(false)
   soldAt          DateTime?
+  isArchived      Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// ============================================================
+// MCP / OAuth 2.1
+// ============================================================
+
+enum OAuthClientSource {
+  CIMD
+  DCR
+  PREREGISTERED
+}
+
+/// Un cliente OAuth registrado (Claude Desktop, Claude Code, claude.ai, un
+/// cliente MCP de terceros). El `clientId` es una URL https:// cuando viene
+/// de Client ID Metadata Documents, o un id generado cuando viene de DCR.
+model OAuthClient {
+  id                      String            @id @default(cuid())
+  clientId                String            @unique
+  clientSecretHash        String?
+  clientName              String
+  clientUri               String?
+  logoUri                 String?
+  redirectUris            String[]
+  grantTypes              String[]          @default(["authorization_code", "refresh_token"])
+  responseTypes           String[]          @default(["code"])
+  tokenEndpointAuthMethod String            @default("none")
+  source                  OAuthClientSource
+  cimdFetchedAt           DateTime?
+  cimdExpiresAt           DateTime?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  @@index([source])
+}
+
+/// Petición de /authorize pendiente de que el usuario apruebe o rechace en
+/// la pantalla de consentimiento. Vive ~10 minutos.
+model OAuthAuthorizationRequest {
+  id                  String    @id @default(cuid())
+  clientId            String
+  redirectUri         String
+  scopes              String[]
+  resource            String
+  state               String?
+  codeChallenge       String
+  codeChallengeMethod String    @default("S256")
+  userId              String?   @db.Uuid
+  approvedAt          DateTime?
+  expiresAt           DateTime
+  createdAt           DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+/// Authorization code emitido tras el consentimiento. Se consume una sola
+/// vez en /oauth/token (con update atómico `consumedAt IS NULL`); si llega
+/// consumido de nuevo, es un intento de replay.
+model OAuthAuthorizationCode {
+  id                  String    @id @default(cuid())
+  codeHash            String    @unique
+  userId              String    @db.Uuid
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId            String
+  redirectUri         String
+  scopes              String[]
+  resource            String
+  codeChallenge       String
+  codeChallengeMethod String
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum McpTokenKind {
+  OAUTH_ACCESS
+  OAUTH_REFRESH
+  PAT
+}
+
+/// Una sola tabla para access tokens, refresh tokens y tokens manuales
+/// (PAT): el guard resuelve cualquier Bearer con un único camino. El
+/// secreto nunca se guarda en claro, solo su hash SHA-256.
+model McpToken {
+  id            String       @id @default(cuid())
+  userId        String       @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind          McpTokenKind
+  tokenHash     String       @unique
+  prefix        String
+  name          String?
+  clientId      String?
+  scopes        String[]
+  resource      String?
+  parentTokenId String?      @unique
+  parentToken   McpToken?    @relation("TokenRotation", fields: [parentTokenId], references: [id])
+  rotatedTo     McpToken?    @relation("TokenRotation")
+  expiresAt     DateTime?
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime     @default(now())
+
+  @@index([userId])
+  @@index([clientId])
+  @@index([expiresAt])
+}
+
+enum McpCallStatus {
+  OK
+  ERROR
+  DENIED
+}
+
+/// Registro de toda llamada a una tool MCP (lecturas y escrituras). Es la
+/// base de la pantalla de "Actividad" y de `fluxo_undo` — que solo puede
+/// deshacer una creación si sabe qué entidad creó esa llamada puntual.
+model McpAuditLog {
+  id              String        @id @default(cuid())
+  userId          String        @db.Uuid
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenId         String?
+  clientName      String?
+  tool            String
+  argsRedacted    Json?
+  status          McpCallStatus
+  errorCode       String?
+  entityType      String?
+  entityId        String?
+  clientRequestId String?
+  undoneAt        DateTime?
+  durationMs      Int?
+  createdAt       DateTime      @default(now())
+
+  @@index([userId, createdAt])
+  @@index([tokenId, createdAt])
 }

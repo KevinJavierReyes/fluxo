@@ -38,11 +38,15 @@ export class TransactionsController {
   }
 
   @Post()
-  create(
+  async create(
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: CreateTransactionDto,
   ) {
-    return this.transactionsService.create(user.id, dto);
+    // El wrapper {transaction, alreadyExisted} es para que MCP pueda avisar
+    // "ya la habías registrado" en un retry; REST mantiene su contrato de
+    // siempre devolver la transacción directa.
+    const { transaction } = await this.transactionsService.create(user.id, dto);
+    return transaction;
   }
 
   @Patch(':id')

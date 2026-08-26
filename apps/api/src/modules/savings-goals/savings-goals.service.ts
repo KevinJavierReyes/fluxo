@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SavingsGoal } from '@prisma/client';
+import { archivedResult, deletedResult } from '../../common/delete-result';
+import { CategoriesService } from '../categories/categories.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   ContributeSavingsGoalDto,
@@ -13,7 +15,10 @@ import {
 
 @Injectable()
 export class SavingsGoalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categoriesService: CategoriesService,
+  ) {}
 
   private async withProgress(goal: SavingsGoal) {
     const agg = await this.prisma.transaction.aggregate({
@@ -27,6 +32,7 @@ export class SavingsGoalsService {
     const goals = await this.prisma.savingsGoal.findMany({
       where: { userId, isArchived: false },
       orderBy: { name: 'asc' },
+      take: 200,
     });
     return Promise.all(goals.map((g) => this.withProgress(g)));
   }
@@ -71,17 +77,36 @@ export class SavingsGoalsService {
     });
 
     if (contributionCount > 0) {
-      return this.prisma.savingsGoal.update({
+      const goal = await this.prisma.savingsGoal.update({
         where: { id },
         data: { isArchived: true },
       });
+      return archivedResult(id, await this.withProgress(goal));
     }
 
     await this.prisma.savingsGoal.delete({ where: { id } });
-    return { id, deleted: true };
+    return deletedResult(id);
   }
 
   async contribute(userId: string, id: string, dto: ContributeSavingsGoalDto) {
+    if (dto.clientRequestId) {
+      const existing = await this.prisma.transaction.findUnique({
+        where: {
+          userId_clientRequestId: {
+            userId,
+            clientRequestId: dto.clientRequestId,
+          },
+        },
+      });
+      if (existing) {
+        return {
+          goal: await this.findOne(userId, id),
+          transactionId: existing.id,
+          alreadyExisted: true,
+        };
+      }
+    }
+
     const goal = await this.findRaw(userId, id);
 
     const account = await this.prisma.account.findFirst({
@@ -93,7 +118,7 @@ export class SavingsGoalsService {
 
     const categoryId = await this.resolveCategoryId(userId, dto.categoryId);
 
-    await this.prisma.transaction.create({
+    const contribution = await this.prisma.transaction.create({
       data: {
         userId,
         accountId: dto.accountId,
@@ -103,10 +128,16 @@ export class SavingsGoalsService {
         date: dto.date,
         description: dto.description ?? `Aporte a ${goal.name}`,
         savingsGoalId: id,
+        source: 'SAVINGS',
+        clientRequestId: dto.clientRequestId,
       },
     });
 
-    return this.findOne(userId, id);
+    return {
+      goal: await this.findOne(userId, id),
+      transactionId: contribution.id,
+      alreadyExisted: false,
+    };
   }
 
   private async resolveCategoryId(
@@ -114,12 +145,11 @@ export class SavingsGoalsService {
     categoryId?: string,
   ): Promise<string> {
     if (categoryId) {
-      const category = await this.prisma.category.findFirst({
-        where: { id: categoryId, userId },
-      });
-      if (!category) {
-        throw new BadRequestException('La categoría indicada no existe');
-      }
+      const category = await this.categoriesService.assertTypeMatches(
+        userId,
+        categoryId,
+        'EXPENSE',
+      );
       return category.id;
     }
 

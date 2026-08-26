@@ -56,11 +56,16 @@ export class SavingsGoalsController {
   }
 
   @Post(':id/contribute')
-  contribute(
+  async contribute(
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') id: string,
     @Body() dto: ContributeSavingsGoalDto,
   ) {
-    return this.savingsGoalsService.contribute(user.id, id, dto);
+    const { goal } = await this.savingsGoalsService.contribute(
+      user.id,
+      id,
+      dto,
+    );
+    return goal;
   }
 }

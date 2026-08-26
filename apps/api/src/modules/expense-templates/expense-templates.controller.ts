@@ -58,11 +58,16 @@ export class ExpenseTemplatesController {
   }
 
   @Post(':id/apply')
-  apply(
+  async apply(
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') id: string,
     @Body() dto: ApplyExpenseTemplateDto,
   ) {
-    return this.expenseTemplatesService.apply(user.id, id, dto);
+    const { transaction } = await this.expenseTemplatesService.apply(
+      user.id,
+      id,
+      dto,
+    );
+    return transaction;
   }
 }

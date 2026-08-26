@@ -3,6 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { TransactionType } from '@prisma/client';
+import { archivedResult, deletedResult } from '../../common/delete-result';
+import { CategoriesService } from '../categories/categories.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   ApplyExpenseTemplateDto,
@@ -12,12 +15,16 @@ import {
 
 @Injectable()
 export class ExpenseTemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categoriesService: CategoriesService,
+  ) {}
 
   findAll(userId: string) {
     return this.prisma.expenseTemplate.findMany({
       where: { userId, isArchived: false },
       orderBy: { name: 'asc' },
+      take: 200,
     });
   }
 
@@ -31,37 +38,39 @@ export class ExpenseTemplatesService {
     return template;
   }
 
-  private async assertOwnership(
-    userId: string,
-    accountId?: string,
-    categoryId?: string,
-  ) {
-    if (accountId) {
-      const account = await this.prisma.account.findFirst({
-        where: { id: accountId, userId },
-      });
-      if (!account) {
-        throw new BadRequestException('La cuenta indicada no existe');
-      }
+  private async assertAccountOwnership(userId: string, accountId?: string) {
+    if (!accountId) {
+      return;
     }
-    if (categoryId) {
-      const category = await this.prisma.category.findFirst({
-        where: { id: categoryId, userId },
-      });
-      if (!category) {
-        throw new BadRequestException('La categoría indicada no existe');
-      }
+    const account = await this.prisma.account.findFirst({
+      where: { id: accountId, userId },
+    });
+    if (!account) {
+      throw new BadRequestException('La cuenta indicada no existe');
     }
   }
 
   async create(userId: string, dto: CreateExpenseTemplateDto) {
-    await this.assertOwnership(userId, dto.accountId, dto.categoryId);
+    await this.assertAccountOwnership(userId, dto.accountId);
+    await this.categoriesService.assertTypeMatches(
+      userId,
+      dto.categoryId,
+      dto.type,
+    );
     return this.prisma.expenseTemplate.create({ data: { ...dto, userId } });
   }
 
   async update(userId: string, id: string, dto: UpdateExpenseTemplateDto) {
-    if (dto.accountId || dto.categoryId) {
-      await this.assertOwnership(userId, dto.accountId, dto.categoryId);
+    const existing = await this.findOne(userId, id);
+    await this.assertAccountOwnership(userId, dto.accountId);
+    if (dto.type !== undefined || dto.categoryId !== undefined) {
+      const effectiveType: TransactionType = dto.type ?? existing.type;
+      const effectiveCategoryId = dto.categoryId ?? existing.categoryId;
+      await this.categoriesService.assertTypeMatches(
+        userId,
+        effectiveCategoryId,
+        effectiveType,
+      );
     }
     const result = await this.prisma.expenseTemplate.updateMany({
       where: { id, userId },
@@ -81,17 +90,32 @@ export class ExpenseTemplatesService {
     });
 
     if (usageCount > 0) {
-      return this.prisma.expenseTemplate.update({
+      const template = await this.prisma.expenseTemplate.update({
         where: { id },
         data: { isArchived: true },
       });
+      return archivedResult(id, template);
     }
 
     await this.prisma.expenseTemplate.delete({ where: { id } });
-    return { id, deleted: true };
+    return deletedResult(id);
   }
 
   async apply(userId: string, id: string, dto: ApplyExpenseTemplateDto) {
+    if (dto.clientRequestId) {
+      const existing = await this.prisma.transaction.findUnique({
+        where: {
+          userId_clientRequestId: {
+            userId,
+            clientRequestId: dto.clientRequestId,
+          },
+        },
+      });
+      if (existing) {
+        return { transaction: existing, alreadyExisted: true };
+      }
+    }
+
     const template = await this.findOne(userId, id);
 
     const accountId = dto.accountId ?? template.accountId;
@@ -106,9 +130,9 @@ export class ExpenseTemplatesService {
         'Debes indicar un monto para aplicar la plantilla',
       );
     }
-    await this.assertOwnership(userId, accountId, template.categoryId);
+    await this.assertAccountOwnership(userId, accountId);
 
-    return this.prisma.transaction.create({
+    const transaction = await this.prisma.transaction.create({
       data: {
         userId,
         accountId,
@@ -119,7 +143,9 @@ export class ExpenseTemplatesService {
         description: dto.description ?? template.name,
         source: 'TEMPLATE',
         expenseTemplateId: template.id,
+        clientRequestId: dto.clientRequestId,
       },
     });
+    return { transaction, alreadyExisted: false };
   }
 }
