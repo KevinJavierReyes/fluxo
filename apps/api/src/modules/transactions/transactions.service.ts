@@ -55,6 +55,10 @@ export class TransactionsService {
       where,
       orderBy: [{ date: 'desc' }, { id: 'desc' }],
       take: query.limit + 1,
+      include: {
+        account: { select: { name: true } },
+        category: { select: { name: true } },
+      },
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
 

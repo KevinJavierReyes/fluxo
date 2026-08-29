@@ -152,14 +152,14 @@ describe('MCP server (e2e)', () => {
     const names = body.result!.tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
-        'fluxo_describe',
-        'fluxo_get',
         'fluxo_list',
         'fluxo_search',
         'get_budget_status',
         'get_cashflow_projection',
         'get_dashboard',
         'get_net_worth',
+        'get_upcoming_bills',
+        'list_recurring_expenses',
         'search_transactions',
       ].sort(),
     );
@@ -202,7 +202,26 @@ describe('MCP server (e2e)', () => {
     expect(items[0].amount).toBe(45.5);
   });
 
-  it('fluxo_list y fluxo_get devuelven los datos sembrados', async () => {
+  // Regresión del bug reportado: el detalle (no solo el total) tiene que
+  // llegar en content[0].text, porque es lo único que todo cliente MCP
+  // garantiza que se inyecta al contexto del modelo — structuredContent
+  // puede no llegarle nunca.
+  it('search_transactions incluye el detalle de cada transacción en el texto, no solo el total', async () => {
+    const res = await call({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_transactions', arguments: {} },
+    });
+    const body = res.body as JsonRpcResponse<ToolCallResult>;
+    const text = body.result!.content[0].text;
+    expect(text).toContain('45.50');
+    expect(text).toContain('Mercado');
+    expect(text).toContain('Cuenta Principal');
+    expect(text).toContain('Super');
+  });
+
+  it('fluxo_list devuelve los datos sembrados y los nombra en el texto', async () => {
     const listRes = await call({
       jsonrpc: '2.0',
       id: 1,
@@ -212,53 +231,23 @@ describe('MCP server (e2e)', () => {
     const listBody = listRes.body as JsonRpcResponse<ToolCallResult>;
     const items = listBody.result!.structuredContent!.items as { id: string }[];
     expect(items.map((i) => i.id)).toContain(accountId);
-
-    const getRes = await call({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'fluxo_get',
-        arguments: { resource: 'account', id: accountId },
-      },
-    });
-    const getBody = getRes.body as JsonRpcResponse<ToolCallResult>;
-    expect(getBody.result!.isError).toBeFalsy();
+    expect(listBody.result!.content[0].text).toContain('Cuenta Principal');
   });
 
-  it('fluxo_get con un id inexistente devuelve isError, no un 500', async () => {
+  it('fluxo_search devuelve las coincidencias nombradas en el texto, no solo el conteo', async () => {
     const res = await call({
       jsonrpc: '2.0',
       id: 1,
       method: 'tools/call',
       params: {
-        name: 'fluxo_get',
-        arguments: { resource: 'account', id: 'no-existe' },
+        name: 'fluxo_search',
+        arguments: { resource: 'account', q: 'Principal' },
       },
     });
-    expect(res.status).toBe(200); // el error va en el resultado MCP, no en el transporte HTTP
     const body = res.body as JsonRpcResponse<ToolCallResult>;
-    expect(body.result!.isError).toBe(true);
-  });
-
-  it('fluxo_describe(asset) devuelve un JSON Schema válido', async () => {
-    const res = await call({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name: 'fluxo_describe', arguments: { resource: 'asset' } },
-    });
-    const body = res.body as JsonRpcResponse<ToolCallResult>;
-    const createSchema = body.result!.structuredContent!.createSchema as {
-      type: string;
-      required: string[];
-      properties: Record<string, unknown>;
-    };
-    expect(createSchema.type).toBe('object');
-    expect(createSchema.required).toEqual(
-      expect.arrayContaining(['name', 'estimatedValue']),
-    );
-    expect(createSchema.properties.estimatedValue).toBeDefined();
+    expect(body.result!.isError).toBeFalsy();
+    expect(body.result!.content[0].text).toContain('Cuenta Principal');
+    expect(body.result!.content[0].text).toContain(accountId);
   });
 
   it('search_transactions con una categoría inexistente responde isError con candidatas, no un fallo crudo', async () => {

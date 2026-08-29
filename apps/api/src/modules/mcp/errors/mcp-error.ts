@@ -64,7 +64,7 @@ export function toToolErrorResult(
       content: [
         {
           type: 'text',
-          text: `Datos inválidos — ${issues}. Usa fluxo_describe para ver el schema completo.`,
+          text: `Datos inválidos — ${issues}. Revisá los campos esperados en la descripción de fluxo_create para este recurso.`,
         },
       ],
       isError: true,

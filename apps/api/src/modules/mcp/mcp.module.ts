@@ -11,6 +11,7 @@ import { ObligationsModule } from '../obligations/obligations.module';
 import { RecurringRulesModule } from '../recurring-rules/recurring-rules.module';
 import { SavingsGoalsModule } from '../savings-goals/savings-goals.module';
 import { TransactionsModule } from '../transactions/transactions.module';
+import { TransfersModule } from '../transfers/transfers.module';
 import { McpAuditService } from './audit/mcp-audit.service';
 import { McpAuthGuard } from './guards/mcp-auth.guard';
 import { McpController } from './mcp.controller';
@@ -34,6 +35,7 @@ import { McpUndoService } from './undo/mcp-undo.service';
     ExpenseTemplatesModule,
     RecurringRulesModule,
     TransactionsModule,
+    TransfersModule,
     DashboardModule,
     CashflowModule,
     NetWorthModule,

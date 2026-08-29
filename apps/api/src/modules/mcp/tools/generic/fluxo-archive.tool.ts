@@ -2,13 +2,13 @@ import { z } from 'zod';
 import type { McpPolicyService } from '../../policy/mcp-policy.service';
 import { entityResult, type ToolDefinition } from '../types';
 import {
-  RESOURCE_KEYS,
+  GENERIC_RESOURCE_KEYS,
   type ResourceDescriptor,
   type ResourceKey,
 } from './resource-registry';
 
 const inputSchema = {
-  resource: z.enum(RESOURCE_KEYS),
+  resource: z.enum(GENERIC_RESOURCE_KEYS),
   id: z.string().min(1),
   confirm: z.literal(true).describe('Tiene que ser exactamente `true`'),
 };
@@ -22,7 +22,7 @@ export function fluxoArchiveTool(
     requiredScope: 'config:write',
     config: {
       title: 'Archivar o borrar un recurso de configuración',
-      description: `Da de baja un elemento de un recurso de configuración por su id. Requiere confirm:true. Si el elemento tiene referencias (transacciones, reglas, etc.) se archiva en vez de borrarse; de lo contrario se borra. Opera sobre un solo elemento por llamada — no hay borrado masivo. Recursos: ${RESOURCE_KEYS.join(', ')}.`,
+      description: `Da de baja un elemento de un recurso de configuración por su id (no reglas recurrentes — para eso usa delete_recurring_expense). Requiere confirm:true. Si el elemento tiene referencias (transacciones, reglas, etc.) se archiva en vez de borrarse; de lo contrario se borra. Opera sobre un solo elemento por llamada — no hay borrado masivo. Recursos: ${GENERIC_RESOURCE_KEYS.join(', ')}.`,
       inputSchema,
       annotations: {
         readOnlyHint: false,

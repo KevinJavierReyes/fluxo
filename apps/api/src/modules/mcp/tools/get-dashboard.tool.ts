@@ -51,7 +51,7 @@ export function getDashboardTool(deps: {
     config: {
       title: 'Ver panel financiero',
       description:
-        'Resumen financiero: saldos por cuenta, proyección de flujo de caja, y desglose por categoría. Sin fechas, da el estado general. Con "from"/"to", da el detalle del rango: KPIs del periodo, serie de saldo, e ingresos/egresos por grupo de categoría.',
+        'Resumen financiero: saldos por cuenta, proyección de flujo de caja, y desglose por categoría. Sin fechas, da el estado general. Con "from"/"to", da el detalle del rango: KPIs del periodo, serie de saldo, e ingresos/egresos por grupo de categoría — agregados, no el detalle de cada transacción individual (para eso usa search_transactions).',
       inputSchema,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

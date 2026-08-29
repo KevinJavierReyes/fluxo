@@ -45,6 +45,58 @@ function fromDateKey(key: string): Date {
 export class CashflowService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Las transferencias no son ingreso ni gasto real (se cancelan a nivel
+   * patrimonio), así que nunca se mezclan con `income`/`expense` — esos
+   * campos siguen siendo "ingreso/gasto real" en todos lados que los
+   * exponen. Solo afectan el saldo (`closingBalance`/`openingBalance`), acá
+   * y en `getProjection`/`getBalanceSeries` de abajo. Mismo criterio que
+   * transacciones: sin `accountId`, se excluye la pata que caiga en una
+   * cuenta archivada.
+   */
+  private async getTransferNetDeltasByDate(
+    userId: string,
+    from: Date,
+    to: Date,
+    accountId?: string,
+  ): Promise<Map<string, number>> {
+    const [transfersIn, transfersOut] = await Promise.all([
+      this.prisma.transfer.groupBy({
+        by: ['date'],
+        where: {
+          userId,
+          ...(accountId
+            ? { toAccountId: accountId }
+            : { toAccount: { isArchived: false } }),
+          date: { gte: from, lte: to },
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.transfer.groupBy({
+        by: ['date'],
+        where: {
+          userId,
+          ...(accountId
+            ? { fromAccountId: accountId }
+            : { fromAccount: { isArchived: false } }),
+          date: { gte: from, lte: to },
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const deltas = new Map<string, number>();
+    for (const row of transfersIn) {
+      const key = toDateKey(row.date);
+      deltas.set(key, (deltas.get(key) ?? 0) + Number(row._sum.amount ?? 0));
+    }
+    for (const row of transfersOut) {
+      const key = toDateKey(row.date);
+      deltas.set(key, (deltas.get(key) ?? 0) - Number(row._sum.amount ?? 0));
+    }
+    return deltas;
+  }
+
   async getProjection(
     userId: string,
     { from, to, accountId }: { from: Date; to: Date; accountId?: string },
@@ -83,15 +135,25 @@ export class CashflowService {
       byDate.set(key, entry);
     }
 
-    const sortedKeys = Array.from(byDate.keys()).sort();
+    const transferDeltas = await this.getTransferNetDeltasByDate(
+      userId,
+      from,
+      to,
+      accountId,
+    );
+
+    const sortedKeys = Array.from(
+      new Set([...byDate.keys(), ...transferDeltas.keys()]),
+    ).sort();
     let running = startingBalance;
     const points: CashflowDayPoint[] = [];
     const negativeDays: Date[] = [];
 
     for (const key of sortedKeys) {
-      const { income, expense } = byDate.get(key)!;
+      const { income, expense } = byDate.get(key) ?? { income: 0, expense: 0 };
+      const transferNet = transferDeltas.get(key) ?? 0;
       const openingBalance = running;
-      const closingBalance = openingBalance + income - expense;
+      const closingBalance = openingBalance + income - expense + transferNet;
       running = closingBalance;
       const isNegative = closingBalance < 0;
       if (isNegative) {
@@ -164,6 +226,21 @@ export class CashflowService {
       byBucket.set(key, entry);
     }
 
+    const transferDeltasByDate = await this.getTransferNetDeltasByDate(
+      userId,
+      seriesStart,
+      to,
+      accountId,
+    );
+    const transferDeltasByBucket = new Map<string, number>();
+    for (const [dateKey, delta] of transferDeltasByDate) {
+      const key = toDateKey(bucketStart(fromDateKey(dateKey), granularity));
+      transferDeltasByBucket.set(
+        key,
+        (transferDeltasByBucket.get(key) ?? 0) + delta,
+      );
+    }
+
     const today = todayForUser(timezone);
     const todayBucket = bucketStart(today, granularity).getTime();
 
@@ -173,8 +250,9 @@ export class CashflowService {
         income: 0,
         expense: 0,
       };
+      const transferNet = transferDeltasByBucket.get(toDateKey(bucket)) ?? 0;
       const bucketOpening = running;
-      const closingBalance = bucketOpening + income - expense;
+      const closingBalance = bucketOpening + income - expense + transferNet;
       running = closingBalance;
       return {
         bucket,
@@ -211,15 +289,39 @@ export class CashflowService {
       0,
     );
 
-    const agg = await this.prisma.transaction.groupBy({
-      by: ['type'],
-      where: {
-        userId,
-        ...(accountId ? { accountId } : { account: { isArchived: false } }),
-        date: exclusive ? { lt: at } : { lte: at },
-      },
-      _sum: { amount: true },
-    });
+    const dateFilter = exclusive ? { lt: at } : { lte: at };
+
+    const [agg, transfersIn, transfersOut] = await Promise.all([
+      this.prisma.transaction.groupBy({
+        by: ['type'],
+        where: {
+          userId,
+          ...(accountId ? { accountId } : { account: { isArchived: false } }),
+          date: dateFilter,
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.transfer.aggregate({
+        where: {
+          userId,
+          ...(accountId
+            ? { toAccountId: accountId }
+            : { toAccount: { isArchived: false } }),
+          date: dateFilter,
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.transfer.aggregate({
+        where: {
+          userId,
+          ...(accountId
+            ? { fromAccountId: accountId }
+            : { fromAccount: { isArchived: false } }),
+          date: dateFilter,
+        },
+        _sum: { amount: true },
+      }),
+    ]);
 
     const income = Number(
       agg.find((a) => a.type === TransactionType.INCOME)?._sum.amount ?? 0,
@@ -227,7 +329,10 @@ export class CashflowService {
     const expense = Number(
       agg.find((a) => a.type === TransactionType.EXPENSE)?._sum.amount ?? 0,
     );
+    const transferNet =
+      Number(transfersIn._sum.amount ?? 0) -
+      Number(transfersOut._sum.amount ?? 0);
 
-    return openingBalanceSum + income - expense;
+    return openingBalanceSum + income - expense + transferNet;
   }
 }

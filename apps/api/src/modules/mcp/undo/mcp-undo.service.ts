@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TransactionsService } from '../../transactions/transactions.service';
+import { TransfersService } from '../../transfers/transfers.service';
 import { McpToolError } from '../errors/mcp-error';
 import type {
   ResourceDescriptor,
@@ -16,6 +17,8 @@ export const UNDOABLE_TOOLS = [
   'apply_expense_template',
   'contribute_to_savings_goal',
   'fluxo_create',
+  'create_recurring_expense',
+  'transfer_between_accounts',
 ];
 
 // Prisma escribe `createdAt` (DB) y `updatedAt` (cliente) con relojes
@@ -56,6 +59,7 @@ export class McpUndoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly transactionsService: TransactionsService,
+    private readonly transfersService: TransfersService,
     @Inject(RESOURCE_REGISTRY)
     private readonly registry: Record<ResourceKey, ResourceDescriptor>,
   ) {}
@@ -117,6 +121,13 @@ export class McpUndoService {
       );
       assertUntouchedSinceCreation(transaction);
       await this.transactionsService.remove(userId, entry.entityId);
+    } else if (entry.entityType === 'transfer') {
+      const transfer = await this.transfersService.findOne(
+        userId,
+        entry.entityId,
+      );
+      assertUntouchedSinceCreation(transfer);
+      await this.transfersService.remove(userId, entry.entityId);
     } else {
       const descriptor = this.registry[entry.entityType as ResourceKey];
       if (!descriptor) {

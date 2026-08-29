@@ -41,6 +41,26 @@ export const RESOURCE_KEYS = [
 ] as const;
 export type ResourceKey = (typeof RESOURCE_KEYS)[number];
 
+/**
+ * `recurring_rule` tiene tools dedicados (create/update/delete/list_recurring_expense)
+ * porque sus campos condicionales (byMonthDay/byWeekday según frequency) son
+ * frágiles para el modelo dentro de un blob `data` genérico. Se saca de acá
+ * para que fluxo_list/create/update/archive no lo ofrezcan como opción — pero
+ * sigue en RESOURCE_KEYS/el registry completo porque fluxo_undo necesita
+ * descriptor.get/archive para poder deshacer una creación.
+ */
+export const GENERIC_RESOURCE_KEYS = [
+  'account',
+  'category',
+  'category_group',
+  'asset',
+  'obligation',
+  'budget',
+  'savings_goal',
+  'expense_template',
+] as const;
+export type GenericResourceKey = (typeof GENERIC_RESOURCE_KEYS)[number];
+
 export interface ArchiveResult {
   id: string;
   action: 'deleted' | 'archived';
@@ -158,7 +178,8 @@ export function buildResourceRegistry(
       createSchema: createBudgetSchema,
       updateSchema: updateBudgetSchema,
       // Sin nombre propio (se identifica por grupo + fecha de vigencia); no
-      // participa en fluxo_search, solo en fluxo_list/fluxo_get.
+      // participa en fluxo_search, solo en fluxo_list (y en fluxo_undo, que
+      // usa `get` internamente para reportar qué se deshizo).
       list: (userId) => s.budgetsService.findAll(userId),
       get: (userId, id) => s.budgetsService.findOne(userId, id),
       create: (userId, data) => s.budgetsService.create(userId, data as never),

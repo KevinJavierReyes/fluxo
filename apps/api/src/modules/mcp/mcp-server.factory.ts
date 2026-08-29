@@ -12,9 +12,9 @@ import type { ToolUserContext } from './tools/types';
 const FLUXO_INSTRUCTIONS = `Fluxo es la app de finanzas personales del usuario. Convenciones:
 - Los montos son números en la moneda del usuario, sin símbolo.
 - Las fechas de negocio son YYYY-MM-DD (sin hora); "hoy" se interpreta en la zona horaria del usuario, no en UTC.
-- TransactionType solo admite INCOME o EXPENSE.
+- TransactionType solo admite INCOME o EXPENSE — un movimiento entre dos cuentas propias del usuario no es ninguna de las dos, usa transfer_between_accounts en vez de simularlo con un gasto + un ingreso.
 - Las cuentas y categorías se referencian por nombre o id en las tools de lectura. Si un nombre no matchea exactamente o hay más de una coincidencia, la tool devuelve las opciones válidas — no adivines un id, repregunta al usuario con esas opciones.
-- fluxo_search encuentra el id de un recurso de configuración por nombre; fluxo_describe da el schema completo de un recurso y los valores que ya existen.
+- fluxo_search encuentra el id de un recurso de configuración por nombre. fluxo_create ya incluye en su descripción los campos de cada recurso — no hace falta pedir el schema por separado.
 - Las tools de escritura aceptan clientRequestId opcional: generá uno por operación y reenvialo si reintentás, para no duplicar el movimiento.
 - No hay ninguna tool que borre más de un elemento a la vez, y borrar exige confirm:true explícito.`;
 

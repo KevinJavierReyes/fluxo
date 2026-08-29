@@ -6,6 +6,8 @@ import type { AccountResolver } from '../resolvers/account.resolver';
 import type { CategoryResolver } from '../resolvers/category.resolver';
 import { textResult, type ToolDefinition } from './types';
 
+const MAX_LISTED_ITEMS = 25;
+
 const inputSchema = {
   q: z
     .string()
@@ -90,9 +92,21 @@ export function searchTransactionsTool(deps: {
       const summary =
         page.items.length === 0
           ? 'No se encontraron transacciones con esos filtros.'
-          : `${page.items.length} transacción(es)${page.hasMore ? ' en esta página' : ''}. Ingresos: ${sumIncome.toFixed(2)}, Egresos: ${sumExpense.toFixed(2)}.` +
+          : `${page.items.length} transacción(es)${page.hasMore ? ' en esta página' : ''}. Ingresos: ${sumIncome.toFixed(2)}, Egresos: ${sumExpense.toFixed(2)}.\n` +
+            page.items
+              .slice(0, MAX_LISTED_ITEMS)
+              .map((t) => {
+                const sign = t.type === TransactionType.INCOME ? '+' : '-';
+                const dateStr = t.date.toISOString().slice(0, 10);
+                const desc = t.description ? ` — ${t.description}` : '';
+                return `${dateStr} ${sign}${Number(t.amount).toFixed(2)} · ${t.category.name} (${t.account.name})${desc}`;
+              })
+              .join('\n') +
+            (page.items.length > MAX_LISTED_ITEMS
+              ? `\n... y ${page.items.length - MAX_LISTED_ITEMS} más (recortado en la respuesta, seguí trayendo con el cursor).`
+              : '') +
             (page.hasMore
-              ? ' Hay más resultados sin traer — estos ingresos/egresos son solo de esta página, no el total real. Usa el cursor para la siguiente página, o get_dashboard para un total exacto del rango.'
+              ? '\nHay más resultados sin traer — estos ingresos/egresos son solo de esta página, no el total real. Usa el cursor para la siguiente página, o get_dashboard para un total exacto del rango.'
               : '');
 
       return textResult(summary, {

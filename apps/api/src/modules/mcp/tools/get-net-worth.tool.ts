@@ -18,8 +18,24 @@ export function getNetWorthTool(deps: {
         ctx.userId,
         ctx.timezone,
       );
+
+      const assetsList = result.assets.length
+        ? '\nActivos:\n' +
+          result.assets
+            .map((a) => `${a.name}: ${a.estimatedValue.toFixed(2)}`)
+            .join('\n')
+        : '';
+      const obligationsList = result.obligations.length
+        ? '\nObligaciones:\n' +
+          result.obligations
+            .map((o) => `${o.creditorName}: ${o.remainingBalance.toFixed(2)}`)
+            .join('\n')
+        : '';
+
       return textResult(
-        `Patrimonio neto: ${result.netWorth.toFixed(2)} (cuentas ${result.accountsBalance.toFixed(2)} + activos ${result.assetsValue.toFixed(2)} − obligaciones ${result.obligationsValue.toFixed(2)}).`,
+        `Patrimonio neto: ${result.netWorth.toFixed(2)} (cuentas ${result.accountsBalance.toFixed(2)} + activos ${result.assetsValue.toFixed(2)} − obligaciones ${result.obligationsValue.toFixed(2)}).` +
+          assetsList +
+          obligationsList,
         result,
       );
     },

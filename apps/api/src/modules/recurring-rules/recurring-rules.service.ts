@@ -28,6 +28,10 @@ export class RecurringRulesService {
       where: { userId },
       orderBy: { name: 'asc' },
       take: 200,
+      include: {
+        account: { select: { name: true } },
+        category: { select: { name: true } },
+      },
     });
   }
 

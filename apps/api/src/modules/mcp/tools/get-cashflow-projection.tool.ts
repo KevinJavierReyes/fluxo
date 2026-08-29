@@ -5,6 +5,8 @@ import { requireResolved } from '../errors/mcp-error';
 import type { AccountResolver } from '../resolvers/account.resolver';
 import { textResult, type ToolDefinition } from './types';
 
+const MAX_LISTED_NEGATIVE_DAYS = 15;
+
 const inputSchema = {
   days: z
     .number()
@@ -54,9 +56,20 @@ export function getCashflowProjectionTool(deps: {
         accountId,
       });
 
+      const negativePoints = projection.points.filter((p) => p.isNegative);
       const summary =
-        projection.negativeDays.length > 0
-          ? `Saldo inicial ${projection.startingBalance.toFixed(2)}. El saldo caería en negativo ${projection.negativeDays.length} día(s), el primero el ${projection.negativeDays[0].toISOString().slice(0, 10)}.`
+        negativePoints.length > 0
+          ? `Saldo inicial ${projection.startingBalance.toFixed(2)}. El saldo caería en negativo ${negativePoints.length} día(s):\n` +
+            negativePoints
+              .slice(0, MAX_LISTED_NEGATIVE_DAYS)
+              .map(
+                (p) =>
+                  `${p.date.toISOString().slice(0, 10)}: ${p.closingBalance.toFixed(2)}`,
+              )
+              .join('\n') +
+            (negativePoints.length > MAX_LISTED_NEGATIVE_DAYS
+              ? `\n... y ${negativePoints.length - MAX_LISTED_NEGATIVE_DAYS} día(s) más en negativo.`
+              : '')
           : `Saldo inicial ${projection.startingBalance.toFixed(2)}. No se proyectan días en negativo en los próximos ${days} días.`;
 
       return textResult(

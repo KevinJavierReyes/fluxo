@@ -27,6 +27,7 @@ model User {
   categoryGroups          CategoryGroup[]
   categories              Category[]
   transactions            Transaction[]
+  transfers               Transfer[]
   recurringRules          RecurringRule[]
   expenseTemplates        ExpenseTemplate[]
   savingsGoals            SavingsGoal[]
@@ -60,6 +61,8 @@ model Account {
   transactions     Transaction[]
   recurringRules   RecurringRule[]
   expenseTemplates ExpenseTemplate[]
+  transfersFrom    Transfer[]        @relation("TransferFromAccount")
+  transfersTo      Transfer[]        @relation("TransferToAccount")
 
   @@unique([userId, name])
   @@index([userId])
@@ -162,6 +165,41 @@ model Transaction {
   @@index([recurringRuleId])
   @@index([expenseTemplateId])
   @@index([savingsGoalId])
+}
+
+/**
+ * Movimiento de dinero entre dos cuentas propias del usuario. Deliberadamente
+ * NO es una Transaction de un tercer `type` — una transferencia no es un
+ * ingreso ni un gasto real (se cancela a nivel patrimonio), así que vive en
+ * su propia tabla para que el desglose por categoría, los presupuestos y los
+ * reportes de ingreso/gasto (que solo miran Transaction) no tengan que
+ * filtrarla explícitamente. El único lugar que sí necesita saber de
+ * transferencias es el cálculo de saldo por cuenta (CashflowService).
+ */
+model Transfer {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fromAccountId String
+  fromAccount   Account @relation("TransferFromAccount", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccountId   String
+  toAccount     Account @relation("TransferToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+
+  amount      Decimal  @db.Decimal(14, 2)
+  date        DateTime @db.Date
+  description String?
+
+  // Mismo propósito que en Transaction: reintentar con el mismo id no duplica.
+  clientRequestId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, clientRequestId])
+  @@index([userId, date])
+  @@index([fromAccountId, date])
+  @@index([toAccountId, date])
 }
 
 enum RecurrenceFrequency {

@@ -9,9 +9,9 @@
  * `expectedTools`: cualquiera de estos nombres cuenta como acierto.
  * `expectNoWriteToolCall`: lo correcto es NO escribir nada — llamar tools de
  * *lectura* para investigar antes de aclarar está bien (verificado en vivo:
- * ante "mover dinero entre cuentas" un modelo real llamó fluxo_list para ver
- * qué cuentas existían antes de explicar que no hay operación de
- * transferencia y proponer un plan, sin tocar la base — ese es el
+ * ante "cancelá mi suscripción de Netflix" un modelo real llamó fluxo_list
+ * para ver qué plantillas/recurrentes existían antes de explicar que Fluxo
+ * no gestiona suscripciones externas, sin tocar la base — ese es el
  * comportamiento correcto, no "no llamar nada").
  */
 export interface EvalCase {
@@ -53,6 +53,15 @@ export const EVAL_DATASET: EvalCase[] = [
     expectedTools: ['record_transaction', 'apply_expense_template'],
     notes:
       'Ambiguo a propósito: existe una plantilla "Netflix" pero también es válido registrarlo como gasto suelto.',
+  },
+
+  {
+    id: 'record-06',
+    prompt:
+      'Cargame estos gastos: 20 en supermercado ayer, 15 en farmacia ayer, y 8 de taxi hoy',
+    expectedTools: ['record_transactions_batch'],
+    notes:
+      'Varios ítems en un solo pedido — debería usar el batch en vez de llamar record_transaction 3 veces.',
   },
 
   // --- Consultar / buscar ---
@@ -143,7 +152,7 @@ export const EVAL_DATASET: EvalCase[] = [
   {
     id: 'savings-02',
     prompt: '¿Cuánto llevo ahorrado para mis vacaciones?',
-    expectedTools: ['fluxo_get', 'fluxo_list', 'fluxo_search'],
+    expectedTools: ['fluxo_list', 'fluxo_search'],
   },
 
   // --- Recursos de configuración (genéricas) ---
@@ -160,7 +169,9 @@ export const EVAL_DATASET: EvalCase[] = [
   {
     id: 'generic-03',
     prompt: '¿Qué campos necesita una obligación nueva?',
-    expectedTools: ['fluxo_describe'],
+    expectNoWriteToolCall: true,
+    notes:
+      'fluxo_describe se sacó del catálogo (bajo valor conversacional) — los campos por recurso ya están en la descripción de fluxo_create, así que lo correcto es responder directo o, como mucho, investigar con una tool de lectura, nunca escribir sin haber preguntado.',
   },
   {
     id: 'generic-04',
@@ -185,6 +196,44 @@ export const EVAL_DATASET: EvalCase[] = [
     expectedTools: ['fluxo_list'],
   },
 
+  // --- Recurrentes ---
+  {
+    id: 'recurring-01',
+    prompt: 'Hazme un gasto recurrente de 10 soles todos los meses',
+    expectedTools: ['create_recurring_expense'],
+  },
+  {
+    id: 'recurring-02',
+    prompt: 'Elimina el gasto recurrente de 10 soles',
+    expectedTools: ['delete_recurring_expense', 'list_recurring_expenses'],
+    notes:
+      'delete_recurring_expense resuelve por nombre directamente; list_recurring_expenses también es aceptable si el modelo prefiere confirmar cuál es antes de borrar.',
+  },
+  {
+    id: 'recurring-03',
+    prompt: 'Actualiza el gasto recurrente de 10 soles a 30',
+    expectedTools: ['update_recurring_expense', 'list_recurring_expenses'],
+  },
+  {
+    id: 'recurring-04',
+    prompt: '¿Qué gastos recurrentes tengo?',
+    expectedTools: ['list_recurring_expenses'],
+  },
+  {
+    id: 'recurring-05',
+    prompt: '¿Qué se me vence esta semana?',
+    expectedTools: ['get_upcoming_bills'],
+  },
+
+  // --- Transferencias ---
+  {
+    id: 'transfer-01',
+    prompt: 'Moví 200 de mi cuenta principal a mi cuenta de efectivo',
+    expectedTools: ['transfer_between_accounts'],
+    notes:
+      'Antes no existía esta operación (ver edge-01 histórico); ahora sí hay un tool dedicado y NO debería tratarse como gasto+ingreso.',
+  },
+
   // --- Deshacer ---
   {
     id: 'undo-01',
@@ -193,13 +242,6 @@ export const EVAL_DATASET: EvalCase[] = [
   },
 
   // --- Casos límite: no hay tool para eso ---
-  {
-    id: 'edge-01',
-    prompt: 'Moví 200 de mi cuenta principal a mi cuenta de efectivo',
-    expectNoWriteToolCall: true,
-    notes:
-      'Fluxo no tiene una operación de transferencia entre cuentas. Verificado en vivo: un modelo real llamó fluxo_list para revisar las cuentas existentes antes de explicar el límite y proponer un plan (gasto + ingreso) sin ejecutarlo — investigar con tools de lectura está bien, lo que no debe pasar es escribir sin confirmación.',
-  },
   {
     id: 'edge-02',
     prompt: 'Cancelá mi suscripción de Netflix',

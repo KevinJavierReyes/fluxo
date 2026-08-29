@@ -2,6 +2,7 @@ import { McpUndoService } from './mcp-undo.service';
 import { McpToolError } from '../errors/mcp-error';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { TransactionsService } from '../../transactions/transactions.service';
+import type { TransfersService } from '../../transfers/transfers.service';
 import type {
   ResourceDescriptor,
   ResourceKey,
@@ -16,6 +17,10 @@ function makePrismaMock(): MockPrisma {
 }
 
 function makeTransactionsServiceMock() {
+  return { findOne: jest.fn(), remove: jest.fn() };
+}
+
+function makeTransfersServiceMock() {
   return { findOne: jest.fn(), remove: jest.fn() };
 }
 
@@ -41,22 +46,28 @@ function touched(createdAt: Date, updatedAt: Date) {
 function makeService(
   prisma: MockPrisma,
   transactionsService: ReturnType<typeof makeTransactionsServiceMock>,
+  transfersService: ReturnType<typeof makeTransfersServiceMock>,
   registry: Record<ResourceKey, ResourceDescriptor>,
 ): McpUndoService {
   return new McpUndoService(
     prisma as unknown as PrismaService,
     transactionsService as unknown as TransactionsService,
+    transfersService as unknown as TransfersService,
     registry,
   );
 }
 
 describe('McpUndoService.undo', () => {
   const userId = 'user-1';
-  const now = new Date('2026-08-26T06:00:00.000Z');
+  // Relativo al reloj real (no una fecha hardcodeada): la ventana de undo es
+  // de 24h contra Date.now(), así que un valor fijo eventualmente queda
+  // "viejo" y los tests empiezan a fallar por el solo paso del tiempo.
+  const now = new Date(Date.now() - 60 * 1000);
 
   it('deshace una transacción recién creada y sin tocar', async () => {
     const prisma = makePrismaMock();
     const transactionsService = makeTransactionsServiceMock();
+    const transfersService = makeTransfersServiceMock();
     const registry = {} as Record<ResourceKey, ResourceDescriptor>;
 
     prisma.mcpAuditLog.findFirst.mockResolvedValue({
@@ -70,7 +81,12 @@ describe('McpUndoService.undo', () => {
     });
     transactionsService.findOne.mockResolvedValue(untouched(now));
 
-    const service = makeService(prisma, transactionsService, registry);
+    const service = makeService(
+      prisma,
+      transactionsService,
+      transfersService,
+      registry,
+    );
     const result = await service.undo(userId);
 
     expect(transactionsService.remove).toHaveBeenCalledWith(userId, 'tx-1');
@@ -86,9 +102,44 @@ describe('McpUndoService.undo', () => {
     });
   });
 
+  it('deshace una transferencia recién creada y sin tocar', async () => {
+    const prisma = makePrismaMock();
+    const transactionsService = makeTransactionsServiceMock();
+    const transfersService = makeTransfersServiceMock();
+    const registry = {} as Record<ResourceKey, ResourceDescriptor>;
+
+    prisma.mcpAuditLog.findFirst.mockResolvedValue({
+      id: 'audit-3',
+      tool: 'transfer_between_accounts',
+      status: 'OK',
+      undoneAt: null,
+      entityType: 'transfer',
+      entityId: 'transfer-1',
+      createdAt: now,
+    });
+    transfersService.findOne.mockResolvedValue(untouched(now));
+
+    const service = makeService(
+      prisma,
+      transactionsService,
+      transfersService,
+      registry,
+    );
+    const result = await service.undo(userId);
+
+    expect(transfersService.remove).toHaveBeenCalledWith(userId, 'transfer-1');
+    expect(result).toEqual({
+      auditId: 'audit-3',
+      tool: 'transfer_between_accounts',
+      entityType: 'transfer',
+      entityId: 'transfer-1',
+    });
+  });
+
   it('rechaza deshacer una transacción que fue editada después de crearse', async () => {
     const prisma = makePrismaMock();
     const transactionsService = makeTransactionsServiceMock();
+    const transfersService = makeTransfersServiceMock();
     const registry = {} as Record<ResourceKey, ResourceDescriptor>;
 
     prisma.mcpAuditLog.findFirst.mockResolvedValue({
@@ -104,7 +155,12 @@ describe('McpUndoService.undo', () => {
       touched(now, new Date(now.getTime() + 60_000)),
     );
 
-    const service = makeService(prisma, transactionsService, registry);
+    const service = makeService(
+      prisma,
+      transactionsService,
+      transfersService,
+      registry,
+    );
 
     await expect(service.undo(userId)).rejects.toThrow(McpToolError);
     expect(transactionsService.remove).not.toHaveBeenCalled();
@@ -114,6 +170,7 @@ describe('McpUndoService.undo', () => {
   it('deshace (archiva) un recurso de fluxo_create recién creado y sin tocar', async () => {
     const prisma = makePrismaMock();
     const transactionsService = makeTransactionsServiceMock();
+    const transfersService = makeTransfersServiceMock();
     const assetDescriptor = makeAssetDescriptorMock();
     const registry = {
       asset: assetDescriptor,
@@ -130,7 +187,12 @@ describe('McpUndoService.undo', () => {
     });
     assetDescriptor.get.mockResolvedValue(untouched(now));
 
-    const service = makeService(prisma, transactionsService, registry);
+    const service = makeService(
+      prisma,
+      transactionsService,
+      transfersService,
+      registry,
+    );
     await service.undo(userId);
 
     expect(assetDescriptor.archive).toHaveBeenCalledWith(userId, 'asset-1');
@@ -139,6 +201,7 @@ describe('McpUndoService.undo', () => {
   it('rechaza deshacer un recurso que ya fue archivado/editado manualmente después de crearse', async () => {
     const prisma = makePrismaMock();
     const transactionsService = makeTransactionsServiceMock();
+    const transfersService = makeTransfersServiceMock();
     const assetDescriptor = makeAssetDescriptorMock();
     const registry = {
       asset: assetDescriptor,
@@ -157,7 +220,12 @@ describe('McpUndoService.undo', () => {
       touched(now, new Date(now.getTime() + 10_000)),
     );
 
-    const service = makeService(prisma, transactionsService, registry);
+    const service = makeService(
+      prisma,
+      transactionsService,
+      transfersService,
+      registry,
+    );
 
     await expect(service.undo(userId)).rejects.toThrow(McpToolError);
     expect(assetDescriptor.archive).not.toHaveBeenCalled();
@@ -167,11 +235,17 @@ describe('McpUndoService.undo', () => {
   it('lanza NOT_FOUND cuando no hay nada deshacible en las últimas 24h', async () => {
     const prisma = makePrismaMock();
     const transactionsService = makeTransactionsServiceMock();
+    const transfersService = makeTransfersServiceMock();
     const registry = {} as Record<ResourceKey, ResourceDescriptor>;
 
     prisma.mcpAuditLog.findFirst.mockResolvedValue(null);
 
-    const service = makeService(prisma, transactionsService, registry);
+    const service = makeService(
+      prisma,
+      transactionsService,
+      transfersService,
+      registry,
+    );
 
     await expect(service.undo(userId)).rejects.toThrow(McpToolError);
   });
@@ -179,6 +253,7 @@ describe('McpUndoService.undo', () => {
   it('rechaza deshacer algo que ya se había deshecho antes (buscado por auditId)', async () => {
     const prisma = makePrismaMock();
     const transactionsService = makeTransactionsServiceMock();
+    const transfersService = makeTransfersServiceMock();
     const registry = {} as Record<ResourceKey, ResourceDescriptor>;
 
     prisma.mcpAuditLog.findFirst.mockResolvedValue({
@@ -191,7 +266,12 @@ describe('McpUndoService.undo', () => {
       createdAt: now,
     });
 
-    const service = makeService(prisma, transactionsService, registry);
+    const service = makeService(
+      prisma,
+      transactionsService,
+      transfersService,
+      registry,
+    );
 
     await expect(service.undo(userId, 'audit-1')).rejects.toThrow(McpToolError);
     expect(transactionsService.remove).not.toHaveBeenCalled();

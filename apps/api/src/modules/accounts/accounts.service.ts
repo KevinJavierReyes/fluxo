@@ -43,22 +43,30 @@ export class AccountsService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
 
-    // RecurringRule y ExpenseTemplate ahora tienen FK real hacia Account
-    // (Restrict/SetNull); si hay referencias, archivar en vez de intentar un
-    // borrado físico que la base rechazaría.
-    const [transactionCount, recurringRuleCount, expenseTemplateCount] =
-      await Promise.all([
-        this.prisma.transaction.count({ where: { accountId: id, userId } }),
-        this.prisma.recurringRule.count({ where: { accountId: id, userId } }),
-        this.prisma.expenseTemplate.count({
-          where: { accountId: id, userId },
-        }),
-      ]);
+    // RecurringRule, ExpenseTemplate y Transfer ahora tienen FK real hacia
+    // Account (Restrict/SetNull); si hay referencias, archivar en vez de
+    // intentar un borrado físico que la base rechazaría.
+    const [
+      transactionCount,
+      recurringRuleCount,
+      expenseTemplateCount,
+      transferCount,
+    ] = await Promise.all([
+      this.prisma.transaction.count({ where: { accountId: id, userId } }),
+      this.prisma.recurringRule.count({ where: { accountId: id, userId } }),
+      this.prisma.expenseTemplate.count({
+        where: { accountId: id, userId },
+      }),
+      this.prisma.transfer.count({
+        where: { userId, OR: [{ fromAccountId: id }, { toAccountId: id }] },
+      }),
+    ]);
 
     if (
       transactionCount > 0 ||
       recurringRuleCount > 0 ||
-      expenseTemplateCount > 0
+      expenseTemplateCount > 0 ||
+      transferCount > 0
     ) {
       const account = await this.prisma.account.update({
         where: { id },

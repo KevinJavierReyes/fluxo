@@ -36,12 +36,18 @@ export function getBudgetStatusTool(deps: {
         });
       }
       const overBudget = status.filter((b) => b.isOverBudget);
-      const summary =
+      const header =
         overBudget.length > 0
           ? `${status.length} presupuesto(s). Sobre el límite: ${overBudget.map((b) => b.categoryGroupName).join(', ')}.`
           : `${status.length} presupuesto(s), todos dentro del límite.`;
+      const detail = status
+        .map(
+          (b) =>
+            `${b.categoryGroupName}: gastado ${b.spentAmount.toFixed(2)} de ${b.budgetAmount.toFixed(2)} (${b.percentUsed.toFixed(0)}%)${b.isOverBudget ? ' — sobre el límite' : ''}`,
+        )
+        .join('\n');
 
-      return textResult(summary, { budgets: status });
+      return textResult(`${header}\n${detail}`, { budgets: status });
     },
   };
 }

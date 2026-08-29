@@ -23,6 +23,7 @@ import { ObligationsModule } from './modules/obligations/obligations.module';
 import { RecurringRulesModule } from './modules/recurring-rules/recurring-rules.module';
 import { SavingsGoalsModule } from './modules/savings-goals/savings-goals.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
+import { TransfersModule } from './modules/transfers/transfers.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -34,6 +35,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AccountsModule,
     CategoriesModule,
     TransactionsModule,
+    TransfersModule,
     CashflowModule,
     DashboardModule,
     RecurringRulesModule,

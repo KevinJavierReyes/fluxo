@@ -2,13 +2,13 @@ import { z } from 'zod';
 import { matchByName } from '../../resolvers/resolve-result';
 import { textResult, type ToolDefinition } from '../types';
 import {
-  RESOURCE_KEYS,
+  GENERIC_RESOURCE_KEYS,
   type ResourceDescriptor,
   type ResourceKey,
 } from './resource-registry';
 
 const inputSchema = {
-  resource: z.enum(RESOURCE_KEYS),
+  resource: z.enum(GENERIC_RESOURCE_KEYS),
   q: z.string().min(1).describe('Texto a buscar por nombre'),
 };
 
@@ -21,7 +21,7 @@ export function fluxoSearchTool(
     config: {
       title: 'Buscar un elemento por nombre',
       description:
-        'Busca un elemento de un recurso de configuración por nombre aproximado. Devuelve todas las coincidencias con su id — úsalo antes de fluxo_get o de cualquier operación que necesite un id exacto, en vez de adivinarlo.',
+        'Busca un elemento de un recurso de configuración por nombre aproximado. Devuelve todas las coincidencias con su id — úsalo antes de fluxo_update/fluxo_archive o de cualquier operación que necesite un id exacto, en vez de adivinarlo.',
       inputSchema,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -43,13 +43,14 @@ export function fluxoSearchTool(
           },
         );
       }
-      const summary = `${matches.length} coincidencia(s) para "${args.q as string}".`;
-      return textResult(summary, {
-        matches: matches.map((m) => ({
-          id: m.id,
-          label: descriptor.nameOf!(m),
-        })),
-      });
+      const matchList = matches.map((m) => ({
+        id: m.id as string,
+        label: descriptor.nameOf!(m),
+      }));
+      const summary =
+        `${matches.length} coincidencia(s) para "${args.q as string}":\n` +
+        matchList.map((m) => `${m.label} (id: ${m.id})`).join('\n');
+      return textResult(summary, { matches: matchList });
     },
   };
 }
