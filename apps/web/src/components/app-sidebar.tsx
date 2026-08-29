@@ -1,7 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronsLeftIcon, ChevronsRightIcon, Wallet2Icon } from 'lucide-react';
+import { ChevronsLeftIcon, ChevronsRightIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavList } from '@/components/nav-list';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -27,7 +28,7 @@ export function AppSidebar({
     >
       <div className={cn('flex h-14 items-center gap-2 px-4', collapsed && 'justify-center px-0')}>
         <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-          <Wallet2Icon className="size-5 text-primary" />
+          <Image src="/logo.png" alt="Fluxo" width={45} height={50} className="h-5 w-auto shrink-0" priority />
           {!collapsed && <span>Fluxo</span>}
         </Link>
       </div>

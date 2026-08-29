@@ -1,7 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircleIcon, Wallet2Icon } from 'lucide-react';
+import { AlertCircleIcon } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -44,7 +45,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
       <div className="flex items-center gap-2 text-lg font-semibold">
-        <Wallet2Icon className="size-6 text-primary" />
+        <Image src="/logo.png" alt="Fluxo" width={45} height={50} className="h-6 w-auto shrink-0" priority />
         Fluxo
       </div>
       <Card className="w-full max-w-sm">
