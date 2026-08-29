@@ -29,6 +29,7 @@ import {
   CHART_COLORS,
   CHART_TOOLTIP_STYLE,
   ChartContainer,
+  zeroCrossingOffset,
 } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
@@ -277,6 +278,18 @@ function BalanceChart({
     ? data.balanceSeries.filter((point) => !point.isFuture).at(-1)?.bucket
     : undefined;
 
+  // Offset donde cada tramo cruza el cero, para pintar la línea/relleno de
+  // verde arriba y rojo abajo en vez de un solo color fijo (ver zeroCrossingOffset).
+  const realOffset = useMemo(
+    () => zeroCrossingOffset(chartData.map((d) => d.real).filter((v): v is number => v !== null)),
+    [chartData],
+  );
+  const proyectadoOffset = useMemo(
+    () =>
+      zeroCrossingOffset(chartData.map((d) => d.proyectado).filter((v): v is number => v !== null)),
+    [chartData],
+  );
+
   return (
     <Card>
       <CardHeader className="grid-cols-[1fr_auto] items-center">
@@ -301,13 +314,27 @@ function BalanceChart({
           <ChartContainer height={280}>
             <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0 }}>
               <defs>
+                {/* Verde arriba de cero, rojo abajo: el color deja de depender del tema
+                    y pasa a reflejar si el saldo en ese tramo es positivo o negativo. */}
+                <linearGradient id="saldoLineReal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset={realOffset} stopColor={CHART_COLORS.income} />
+                  <stop offset={realOffset} stopColor={CHART_COLORS.expense} />
+                </linearGradient>
+                <linearGradient id="saldoLineProyectado" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset={proyectadoOffset} stopColor={CHART_COLORS.income} />
+                  <stop offset={proyectadoOffset} stopColor={CHART_COLORS.expense} />
+                </linearGradient>
                 <linearGradient id="saldoGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+                  <stop offset={0} stopColor={CHART_COLORS.income} stopOpacity={0.3} />
+                  <stop offset={realOffset} stopColor={CHART_COLORS.income} stopOpacity={0.05} />
+                  <stop offset={realOffset} stopColor={CHART_COLORS.expense} stopOpacity={0.05} />
+                  <stop offset={1} stopColor={CHART_COLORS.expense} stopOpacity={0.3} />
                 </linearGradient>
                 <linearGradient id="saldoFuturoGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.12} />
-                  <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+                  <stop offset={0} stopColor={CHART_COLORS.income} stopOpacity={0.12} />
+                  <stop offset={proyectadoOffset} stopColor={CHART_COLORS.income} stopOpacity={0.02} />
+                  <stop offset={proyectadoOffset} stopColor={CHART_COLORS.expense} stopOpacity={0.02} />
+                  <stop offset={1} stopColor={CHART_COLORS.expense} stopOpacity={0.12} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -349,7 +376,7 @@ function BalanceChart({
               <Area
                 type="monotone"
                 dataKey="real"
-                stroke={CHART_COLORS.primary}
+                stroke="url(#saldoLineReal)"
                 fill="url(#saldoGradient)"
                 strokeWidth={2}
                 connectNulls={false}
@@ -359,7 +386,7 @@ function BalanceChart({
               <Area
                 type="monotone"
                 dataKey="proyectado"
-                stroke={CHART_COLORS.primary}
+                stroke="url(#saldoLineProyectado)"
                 strokeDasharray="5 4"
                 fill="url(#saldoFuturoGradient)"
                 strokeWidth={2}
