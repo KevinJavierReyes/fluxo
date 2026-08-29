@@ -14,6 +14,8 @@ import { CategoriesService } from './categories.service';
 import {
   CreateCategoryDto,
   CreateCategoryGroupDto,
+  ReorderCategoriesDto,
+  ReorderCategoryGroupsDto,
   UpdateCategoryDto,
   UpdateCategoryGroupDto,
 } from './dto';
@@ -41,6 +43,14 @@ export class CategoriesController {
     @Body() dto: CreateCategoryGroupDto,
   ) {
     return this.categoriesService.createGroup(user.id, dto);
+  }
+
+  @Patch('groups/reorder')
+  reorderGroups(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: ReorderCategoryGroupsDto,
+  ) {
+    return this.categoriesService.reorderGroups(user.id, dto.ids);
   }
 
   @Patch('groups/:id')
@@ -71,6 +81,14 @@ export class CategoriesController {
     @Body() dto: CreateCategoryDto,
   ) {
     return this.categoriesService.create(user.id, dto);
+  }
+
+  @Patch('reorder')
+  reorderCategories(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: ReorderCategoriesDto,
+  ) {
+    return this.categoriesService.reorderCategories(user.id, dto.ids);
   }
 
   @Patch(':id')

@@ -1,5 +1,6 @@
 'use client';
 
+import { TransactionType } from '@fluxo/shared';
 import { CheckCircle2Icon, PencilIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -71,6 +72,7 @@ function LinkRecurringRow({ obligationId }: { obligationId: string }) {
         </Select>
         <CategorySelect
           groups={groups}
+          type={TransactionType.EXPENSE}
           value={categoryId}
           onValueChange={(value) => setCategoryId(value ?? '')}
           placeholder="Categoría"

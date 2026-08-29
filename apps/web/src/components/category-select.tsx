@@ -1,3 +1,4 @@
+import type { TransactionType } from '@fluxo/shared';
 import {
   Select,
   SelectContent,
@@ -8,10 +9,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { GroupChip } from '@/components/group-chip';
+import { filterGroupsByType } from '@/lib/category-type';
 import type { CategoryGroup } from '@/lib/types';
 
 export function CategorySelect({
   groups,
+  type,
   value,
   onValueChange,
   placeholder = 'Selecciona',
@@ -21,6 +24,8 @@ export function CategorySelect({
   allLabel = 'Todas',
 }: {
   groups: CategoryGroup[] | undefined;
+  /** Si se pasa, solo se muestran las categorías de grupos de este tipo (ingreso/egreso). */
+  type?: TransactionType;
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
@@ -30,8 +35,9 @@ export function CategorySelect({
   allowAll?: boolean;
   allLabel?: string;
 }) {
+  const filteredGroups = filterGroupsByType(groups, type);
   const entryById = new Map(
-    groups?.flatMap((group) =>
+    filteredGroups?.flatMap((group) =>
       group.categories.map((category) => [category.id, { category, group }] as const),
     ) ?? [],
   );
@@ -55,7 +61,7 @@ export function CategorySelect({
       </SelectTrigger>
       <SelectContent>
         {allowAll && <SelectItem value="all">{allLabel}</SelectItem>}
-        {groups?.map((group) => (
+        {filteredGroups?.map((group) => (
           <SelectGroup key={group.id}>
             <SelectLabel className="flex items-center gap-1.5">
               <GroupChip color={group.color} icon={group.icon} size="sm" />

@@ -4,9 +4,10 @@ import { useState, type ReactElement } from 'react';
 import { createTransactionSchema, type CreateTransactionInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarIcon } from 'lucide-react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { es } from 'react-day-picker/locale';
 import { useUpdateTransaction } from '@/hooks/use-transactions';
+import { useCategoryTypeSync } from '@/hooks/use-category-type-sync';
 import type { Account, CategoryGroup, Transaction } from '@/lib/types';
 import { dateToUtcMidnight, utcMidnightToLocalDate } from '@/lib/date-range';
 import { FormDialog } from '@/components/form-dialog';
@@ -52,11 +53,16 @@ export function EditTransactionDialog({
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<CreateTransactionInput>({
     resolver: zodResolver(createTransactionSchema),
     defaultValues: defaultsFor(transaction),
   });
+
+  const type = useWatch({ control, name: 'type' });
+  const categoryId = useWatch({ control, name: 'categoryId' });
+  const handleCategoryChange = useCategoryTypeSync({ type, categoryId, groups, setValue });
 
   const onSubmit = handleSubmit(async (values) => {
     await updateTransaction.mutateAsync({ id: transaction.id, input: values });
@@ -119,8 +125,9 @@ export function EditTransactionDialog({
           render={({ field }) => (
             <CategorySelect
               groups={groups}
+              type={type}
               value={field.value}
-              onValueChange={field.onChange}
+              onValueChange={(v) => handleCategoryChange(v, field.onChange)}
               triggerClassName="w-full"
               ariaInvalid={!!errors.categoryId}
             />

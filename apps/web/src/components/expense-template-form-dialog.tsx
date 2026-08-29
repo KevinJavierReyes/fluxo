@@ -120,6 +120,7 @@ export function ExpenseTemplateFormDialog({
           render={({ field }) => (
             <CategorySelect
               groups={groups}
+              type={TransactionType.EXPENSE}
               value={field.value}
               onValueChange={field.onChange}
               triggerClassName="w-full"

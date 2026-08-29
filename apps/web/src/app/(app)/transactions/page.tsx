@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { createTransactionSchema, TransactionType, type CreateTransactionInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { es } from 'react-day-picker/locale';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategoryGroups } from '@/hooks/use-categories';
+import { useCategoryTypeSync } from '@/hooks/use-category-type-sync';
 import { useApplyExpenseTemplate, useExpenseTemplates } from '@/hooks/use-expense-templates';
 import {
   useBulkDeleteTransactions,
@@ -44,6 +45,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
+import { filterGroupsByType, findCategoryGroupType } from '@/lib/category-type';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
 import { CategorySelect } from '@/components/category-select';
 import { MultiSelectPopover } from '@/components/multi-select-popover';
@@ -71,6 +73,17 @@ export default function TransactionsPage() {
     const timeout = setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
     return () => clearTimeout(timeout);
   }, [searchInput]);
+
+  // Al cambiar el tipo filtrado, descarta las categorías seleccionadas que ya no
+  // pertenezcan a ese tipo (quedarían ocultas en el popover pero seguirían filtrando).
+  // Reset durante el render (no en un efecto), mismo patrón que `selectionFiltersKey` abajo.
+  const [prevFilterType, setPrevFilterType] = useState(filterType);
+  if (filterType !== prevFilterType) {
+    setPrevFilterType(filterType);
+    if (filterType !== 'all') {
+      setFilterCategoryIds((prev) => prev.filter((id) => findCategoryGroupType(groups, id) === filterType));
+    }
+  }
 
   const hasActiveFilters =
     filterType !== 'all' ||
@@ -160,6 +173,10 @@ export default function TransactionsPage() {
     },
   });
 
+  const type = useWatch({ control, name: 'type' });
+  const categoryId = useWatch({ control, name: 'categoryId' });
+  const handleCategoryChange = useCategoryTypeSync({ type, categoryId, groups, setValue });
+
   useEffect(() => {
     if (accounts && accounts.length > 0 && !getValues('accountId')) {
       setValue('accountId', accounts[0].id);
@@ -168,9 +185,11 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     if (categories && categories.length > 0 && !getValues('categoryId')) {
-      setValue('categoryId', categories[0].id);
+      const defaultCategory =
+        categories.find((c) => findCategoryGroupType(groups, c.id) === getValues('type')) ?? categories[0];
+      setValue('categoryId', defaultCategory.id);
     }
-  }, [categories, getValues, setValue]);
+  }, [categories, groups, getValues, setValue]);
 
   const [confirmTemplate, setConfirmTemplate] = useState<ExpenseTemplate | null>(null);
   const [confirmAmount, setConfirmAmount] = useState('');
@@ -219,10 +238,13 @@ export default function TransactionsPage() {
 
   const onSubmit = async (values: CreateTransactionInput) => {
     await createTransaction.mutateAsync(values);
+    const defaultCategory = categories?.find(
+      (c) => findCategoryGroupType(groups, c.id) === TransactionType.EXPENSE,
+    );
     reset({
       type: TransactionType.EXPENSE,
       accountId: values.accountId,
-      categoryId: categories?.[0]?.id ?? '',
+      categoryId: defaultCategory?.id ?? categories?.[0]?.id ?? '',
       date: dateToUtcMidnight(new Date()),
     });
   };
@@ -381,8 +403,9 @@ export default function TransactionsPage() {
                 render={({ field }) => (
                   <CategorySelect
                     groups={groups}
+                    type={type}
                     value={field.value}
-                    onValueChange={field.onChange}
+                    onValueChange={(v) => handleCategoryChange(v, field.onChange)}
                     triggerClassName="w-52"
                     ariaInvalid={!!errors.categoryId}
                   />
@@ -484,7 +507,7 @@ export default function TransactionsPage() {
         </FormField>
         <FormField label="Categoría">
           <MultiSelectPopover
-            groups={(groups ?? []).map((group) => ({
+            groups={(filterGroupsByType(groups, filterType === 'all' ? undefined : filterType) ?? []).map((group) => ({
               id: group.id,
               header: (
                 <span className="flex items-center gap-1.5">

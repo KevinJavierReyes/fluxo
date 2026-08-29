@@ -1,6 +1,7 @@
 import {
   createCategoryGroupSchema,
   createCategorySchema,
+  reorderSchema,
   updateCategoryGroupSchema,
   updateCategorySchema,
 } from '@fluxo/shared';
@@ -14,3 +15,5 @@ export class UpdateCategoryGroupDto extends createZodDto(
 ) {}
 export class CreateCategoryDto extends createZodDto(createCategorySchema) {}
 export class UpdateCategoryDto extends createZodDto(updateCategorySchema) {}
+export class ReorderCategoryGroupsDto extends createZodDto(reorderSchema) {}
+export class ReorderCategoriesDto extends createZodDto(reorderSchema) {}
