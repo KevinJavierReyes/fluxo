@@ -40,11 +40,27 @@ export const transactionResponseSchema = z.object({
 });
 export type TransactionResponse = z.infer<typeof transactionResponseSchema>;
 
+const csvIds = z
+  .string()
+  .optional()
+  .transform((value) =>
+    value
+      ? value
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : undefined,
+  );
+
 export const listTransactionsQuerySchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   accountId: z.string().min(1).optional(),
   categoryId: z.string().min(1).optional(),
+  /** CSV de ids de cuenta: `?accountIds=a,b,c` (alternativa multi a `accountId`). */
+  accountIds: csvIds,
+  /** CSV de ids de categoría: `?categoryIds=a,b,c` (alternativa multi a `categoryId`). */
+  categoryIds: csvIds,
   type: z.nativeEnum(TransactionType).optional(),
   /** Búsqueda de texto libre sobre la descripción. */
   q: z.string().min(1).max(120).optional(),
@@ -53,6 +69,13 @@ export const listTransactionsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type ListTransactionsQuery = z.infer<typeof listTransactionsQuerySchema>;
+
+export const bulkDeleteTransactionsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(200),
+});
+export type BulkDeleteTransactionsInput = z.infer<
+  typeof bulkDeleteTransactionsSchema
+>;
 
 export const paginatedTransactionsResponseSchema = z.object({
   items: z.array(transactionResponseSchema),

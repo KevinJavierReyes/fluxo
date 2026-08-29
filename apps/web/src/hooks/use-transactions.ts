@@ -1,4 +1,4 @@
-import type { CreateTransactionInput, UpdateTransactionInput } from '@fluxo/shared';
+import type { CreateTransactionInput, TransactionType, UpdateTransactionInput } from '@fluxo/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { queryKeys } from '@/lib/query-keys';
@@ -17,21 +17,29 @@ interface PaginatedTransactions {
 const MAX_PAGE_SIZE = 200;
 
 export function useTransactions(filters?: {
-  accountId?: string;
-  categoryId?: string;
+  accountIds?: string[];
+  categoryIds?: string[];
+  type?: TransactionType;
+  q?: string;
   from?: string;
   to?: string;
 }) {
   const params = new URLSearchParams();
-  if (filters?.accountId) params.set('accountId', filters.accountId);
-  if (filters?.categoryId) params.set('categoryId', filters.categoryId);
+  if (filters?.accountIds && filters.accountIds.length > 0) {
+    params.set('accountIds', filters.accountIds.join(','));
+  }
+  if (filters?.categoryIds && filters.categoryIds.length > 0) {
+    params.set('categoryIds', filters.categoryIds.join(','));
+  }
+  if (filters?.type) params.set('type', filters.type);
+  if (filters?.q) params.set('q', filters.q);
   if (filters?.from) params.set('from', filters.from);
   if (filters?.to) params.set('to', filters.to);
   params.set('limit', String(MAX_PAGE_SIZE));
   const query = params.toString();
 
   return useQuery({
-    queryKey: queryKeys.transactions(filters),
+    queryKey: queryKeys.transactions({ query }),
     queryFn: async () => {
       const page = await apiClient.get<PaginatedTransactions>(
         `/transactions${query ? `?${query}` : ''}`,
@@ -69,6 +77,18 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/transactions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
+    },
+  });
+}
+
+export function useBulkDeleteTransactions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiClient.post<{ deletedCount: number }>('/transactions/bulk-delete', { ids }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.accounts });

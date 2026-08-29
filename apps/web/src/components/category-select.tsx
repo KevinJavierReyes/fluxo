@@ -17,6 +17,8 @@ export function CategorySelect({
   placeholder = 'Selecciona',
   triggerClassName = 'w-52',
   ariaInvalid,
+  allowAll = false,
+  allLabel = 'Todas',
 }: {
   groups: CategoryGroup[] | undefined;
   value: string;
@@ -24,6 +26,9 @@ export function CategorySelect({
   placeholder?: string;
   triggerClassName?: string;
   ariaInvalid?: boolean;
+  /** Agrega una opción "Todas" al inicio, para usar como filtro. */
+  allowAll?: boolean;
+  allLabel?: string;
 }) {
   const entryById = new Map(
     groups?.flatMap((group) =>
@@ -36,6 +41,7 @@ export function CategorySelect({
       <SelectTrigger className={triggerClassName} aria-invalid={ariaInvalid}>
         <SelectValue placeholder={placeholder}>
           {(v: string) => {
+            if (v === 'all') return allLabel;
             const entry = entryById.get(v);
             if (!entry) return undefined;
             return (
@@ -48,6 +54,7 @@ export function CategorySelect({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
+        {allowAll && <SelectItem value="all">{allLabel}</SelectItem>}
         {groups?.map((group) => (
           <SelectGroup key={group.id}>
             <SelectLabel className="flex items-center gap-1.5">

@@ -8,11 +8,10 @@ import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
+import { RecurringRuleActiveToggle } from '@/components/recurring-rule-active-toggle';
 import { RecurringRuleFormDialog } from '@/components/recurring-rule-form-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GroupChip } from '@/components/group-chip';
 import { FREQUENCY_LABELS } from '@/lib/recurrence';
@@ -88,17 +87,10 @@ export default function RecurringRulesPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <Checkbox
-                      checked={rule.isActive}
-                      onCheckedChange={(checked) =>
-                        updateRule.mutate({ id: rule.id, input: { isActive: checked === true } })
-                      }
-                    />
-                    <Badge variant={rule.isActive ? 'default' : 'secondary'}>
-                      {rule.isActive ? 'Activa' : 'Inactiva'}
-                    </Badge>
-                  </label>
+                  <RecurringRuleActiveToggle
+                    rule={rule}
+                    onConfirm={(next) => updateRule.mutate({ id: rule.id, input: { isActive: next } })}
+                  />
                   <RecurringRuleFormDialog
                     rule={rule}
                     trigger={
@@ -109,7 +101,7 @@ export default function RecurringRulesPage() {
                   />
                   <ConfirmDeleteButton
                     aria-label="Eliminar regla"
-                    description="Esta regla recurrente se eliminará de forma permanente. Esta acción no se puede deshacer."
+                    description="Esta regla recurrente se eliminará de forma permanente. Las transacciones que ya se generaron a partir de ella NO se eliminarán automáticamente: si no las quieres, debes borrarlas manualmente desde el listado de Transacciones (puedes seleccionarlas y eliminarlas en bloque)."
                     onConfirm={() => deleteRule.mutate(rule.id)}
                   />
                 </div>

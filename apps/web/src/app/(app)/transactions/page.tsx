@@ -3,13 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createTransactionSchema, TransactionType, type CreateTransactionInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarIcon, PencilIcon, PlusIcon } from 'lucide-react';
+import { CalendarIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { es } from 'react-day-picker/locale';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategoryGroups } from '@/hooks/use-categories';
 import { useApplyExpenseTemplate, useExpenseTemplates } from '@/hooks/use-expense-templates';
-import { useCreateTransaction, useDeleteTransaction, useTransactions } from '@/hooks/use-transactions';
+import {
+  useBulkDeleteTransactions,
+  useCreateTransaction,
+  useDeleteTransaction,
+  useTransactions,
+} from '@/hooks/use-transactions';
 import type { ExpenseTemplate } from '@/lib/types';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
@@ -17,9 +22,20 @@ import { EmptyState } from '@/components/empty-state';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { EditTransactionDialog } from '@/components/edit-transaction-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +46,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
 import { CategorySelect } from '@/components/category-select';
+import { MultiSelectPopover } from '@/components/multi-select-popover';
 import { GroupChip } from '@/components/group-chip';
 import { FormField } from '@/components/form-field';
 import {
@@ -44,16 +61,67 @@ export default function TransactionsPage() {
   const { data: accounts } = useAccounts();
   const { data: groups } = useCategoryGroups();
   const [range, setRange] = useState<DateRange>(defaultRange);
+  const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');
+  const [filterAccountIds, setFilterAccountIds] = useState<string[]>([]);
+  const [filterCategoryIds, setFilterCategoryIds] = useState<string[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  const hasActiveFilters =
+    filterType !== 'all' ||
+    filterAccountIds.length > 0 ||
+    filterCategoryIds.length > 0 ||
+    debouncedSearch !== '';
+
+  const clearFilters = () => {
+    setFilterType('all');
+    setFilterAccountIds([]);
+    setFilterCategoryIds([]);
+    setSearchInput('');
+  };
+
   const {
     data: transactions,
     isLoading,
     isError,
-  } = useTransactions({ from: toIsoDate(range.from), to: toIsoDate(range.to) });
+  } = useTransactions({
+    from: toIsoDate(range.from),
+    to: toIsoDate(range.to),
+    type: filterType === 'all' ? undefined : filterType,
+    accountIds: filterAccountIds,
+    categoryIds: filterCategoryIds,
+    q: debouncedSearch || undefined,
+  });
   const { data: templates } = useExpenseTemplates();
   const createTransaction = useCreateTransaction();
   const deleteTransaction = useDeleteTransaction();
+  const bulkDeleteTransactions = useBulkDeleteTransactions();
   const applyTemplate = useApplyExpenseTemplate();
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
+
+  // La lista visible cambia con estos filtros, así que la selección deja de
+  // tener sentido; se resetea durante el render (no en un efecto) siguiendo
+  // el patrón de React para "reset state when a prop changes".
+  const selectionFiltersKey = [
+    toIsoDate(range.from),
+    toIsoDate(range.to),
+    filterType,
+    filterAccountIds.join(','),
+    filterCategoryIds.join(','),
+    debouncedSearch,
+  ].join('|');
+  const [prevSelectionFiltersKey, setPrevSelectionFiltersKey] = useState(selectionFiltersKey);
+  if (selectionFiltersKey !== prevSelectionFiltersKey) {
+    setPrevSelectionFiltersKey(selectionFiltersKey);
+    setSelectedIds(new Set());
+  }
 
   const categories = useMemo(
     () =>
@@ -156,6 +224,32 @@ export default function TransactionsPage() {
       accountId: values.accountId,
       categoryId: categories?.[0]?.id ?? '',
       date: dateToUtcMidnight(new Date()),
+    });
+  };
+
+  const allVisibleSelected =
+    !!transactions && transactions.length > 0 && transactions.every((tx) => selectedIds.has(tx.id));
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (!transactions) return;
+    setSelectedIds(checked ? new Set(transactions.map((tx) => tx.id)) : new Set());
+  };
+
+  const toggleSelectRow = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = () => {
+    bulkDeleteTransactions.mutate(Array.from(selectedIds), {
+      onSuccess: () => {
+        setSelectedIds(new Set());
+        setConfirmBulkDeleteOpen(false);
+      },
     });
   };
 
@@ -364,10 +458,114 @@ export default function TransactionsPage() {
         <DateRangePicker value={range} onValueChange={setRange} />
       </div>
 
+      <div className="flex flex-wrap items-end gap-3">
+        <FormField label="Tipo">
+          <TransactionTypeSelect
+            value={filterType}
+            onValueChange={setFilterType}
+            triggerClassName="w-44"
+            allowAll
+            allLabel="Todos los tipos"
+          />
+        </FormField>
+        <FormField label="Cuenta">
+          <MultiSelectPopover
+            groups={[
+              {
+                id: 'accounts',
+                items: (accounts ?? []).map((account) => ({ id: account.id, label: account.name })),
+              },
+            ]}
+            selectedIds={filterAccountIds}
+            onValueChange={setFilterAccountIds}
+            allLabel="Todas las cuentas"
+            triggerClassName="w-48"
+          />
+        </FormField>
+        <FormField label="Categoría">
+          <MultiSelectPopover
+            groups={(groups ?? []).map((group) => ({
+              id: group.id,
+              header: (
+                <span className="flex items-center gap-1.5">
+                  <GroupChip color={group.color} icon={group.icon} size="sm" />
+                  {group.name}
+                </span>
+              ),
+              items: group.categories.map((category) => ({
+                id: category.id,
+                label: category.name,
+                content: (
+                  <>
+                    <GroupChip color={group.color} icon={group.icon} size="sm" />
+                    {category.name}
+                  </>
+                ),
+              })),
+            }))}
+            selectedIds={filterCategoryIds}
+            onValueChange={setFilterCategoryIds}
+            allLabel="Todas las categorías"
+            triggerClassName="w-56"
+          />
+        </FormField>
+        <FormField label="Descripción" className="min-w-[220px] flex-1">
+          <Input
+            placeholder="Buscar por descripción…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </FormField>
+        {hasActiveFilters && (
+          <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+            <XIcon />
+            Limpiar filtros
+          </Button>
+        )}
+      </div>
+
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-2">
+          <p className="text-sm text-muted-foreground">{selectedIds.size} transacción(es) seleccionada(s)</p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Deseleccionar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setConfirmBulkDeleteOpen(true)}
+            >
+              <Trash2Icon />
+              Eliminar seleccionadas
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <AlertDialog open={confirmBulkDeleteOpen} onOpenChange={setConfirmBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar {selectedIds.size} transacción(es)?</AlertDialogTitle>
+            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} disabled={bulkDeleteTransactions.isPending}>
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {isLoading && <Skeleton className="h-48 w-full" />}
       {isError && <QueryError message="No se pudieron cargar tus transacciones." />}
 
-      {transactions && transactions.length === 0 && <EmptyState message="Aún no hay transacciones." />}
+      {transactions && transactions.length === 0 && (
+        <EmptyState message={hasActiveFilters ? 'No hay transacciones que coincidan con los filtros.' : 'Aún no hay transacciones.'} />
+      )}
 
       {transactions && transactions.length > 0 && (
         <Card className="py-0">
@@ -375,7 +573,14 @@ export default function TransactionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Fecha</TableHead>
+                  <TableHead className="w-10 pl-4">
+                    <Checkbox
+                      aria-label="Seleccionar todas"
+                      checked={allVisibleSelected}
+                      onCheckedChange={(checked) => toggleSelectAll(checked === true)}
+                    />
+                  </TableHead>
+                  <TableHead>Fecha</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Cuenta</TableHead>
                   <TableHead>Categoría</TableHead>
@@ -388,6 +593,13 @@ export default function TransactionsPage() {
                 {transactions.map((tx) => (
                   <TableRow key={tx.id}>
                     <TableCell className="pl-4">
+                      <Checkbox
+                        aria-label="Seleccionar transacción"
+                        checked={selectedIds.has(tx.id)}
+                        onCheckedChange={(checked) => toggleSelectRow(tx.id, checked === true)}
+                      />
+                    </TableCell>
+                    <TableCell>
                       {new Date(tx.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
                     </TableCell>
                     <TableCell>

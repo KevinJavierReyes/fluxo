@@ -18,6 +18,7 @@ import { useCreateRecurringRule, useUpdateRecurringRule } from '@/hooks/use-recu
 import { FormDialog } from '@/components/form-dialog';
 import { CategorySelect } from '@/components/category-select';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -344,6 +345,13 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
       <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         {scheduleSummary(rule)}
       </div>
+
+      <Alert variant="warning">
+        <AlertDescription>
+          Editar esta regla no modifica las transacciones que ya se generaron. Los cambios (monto, cuenta, categoría,
+          nombre) solo aplican a las próximas transacciones que se generen hacia adelante.
+        </AlertDescription>
+      </Alert>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="rule-edit-name">Nombre</Label>
