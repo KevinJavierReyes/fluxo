@@ -16,10 +16,17 @@ interface PaginatedTransactions {
 // de los casos; con más de 200 movimientos en el rango, la lista se trunca.
 const MAX_PAGE_SIZE = 200;
 
-export function useTransactions(filters?: { accountId?: string; categoryId?: string }) {
+export function useTransactions(filters?: {
+  accountId?: string;
+  categoryId?: string;
+  from?: string;
+  to?: string;
+}) {
   const params = new URLSearchParams();
   if (filters?.accountId) params.set('accountId', filters.accountId);
   if (filters?.categoryId) params.set('categoryId', filters.categoryId);
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
   params.set('limit', String(MAX_PAGE_SIZE));
   const query = params.toString();
 

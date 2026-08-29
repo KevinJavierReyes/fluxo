@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createTransactionSchema, TransactionType, type CreateTransactionInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarIcon, PlusIcon } from 'lucide-react';
+import { CalendarIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { es } from 'react-day-picker/locale';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -15,6 +15,8 @@ import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
+import { DateRangePicker } from '@/components/date-range-picker';
+import { EditTransactionDialog } from '@/components/edit-transaction-dialog';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,44 +27,28 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
 import { CategorySelect } from '@/components/category-select';
 import { GroupChip } from '@/components/group-chip';
-
-function dateToUtcMidnight(date: Date): Date {
-  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-}
-
-function utcMidnightToLocalDate(date: Date): Date {
-  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-}
-
-function FormField({
-  label,
-  error,
-  className,
-  children,
-}: {
-  label: string;
-  error?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
-      <Label>{label}</Label>
-      {children}
-      <p className="min-h-5 text-sm text-destructive">{error ?? ' '}</p>
-    </div>
-  );
-}
+import { FormField } from '@/components/form-field';
+import {
+  defaultRange,
+  dateToUtcMidnight,
+  toIsoDate,
+  utcMidnightToLocalDate,
+  type DateRange,
+} from '@/lib/date-range';
 
 export default function TransactionsPage() {
   const { data: accounts } = useAccounts();
   const { data: groups } = useCategoryGroups();
-  const { data: transactions, isLoading, isError } = useTransactions();
+  const [range, setRange] = useState<DateRange>(defaultRange);
+  const {
+    data: transactions,
+    isLoading,
+    isError,
+  } = useTransactions({ from: toIsoDate(range.from), to: toIsoDate(range.to) });
   const { data: templates } = useExpenseTemplates();
   const createTransaction = useCreateTransaction();
   const deleteTransaction = useDeleteTransaction();
@@ -373,6 +359,11 @@ export default function TransactionsPage() {
         </CardContent>
       </Card>
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-medium text-muted-foreground">Historial</h2>
+        <DateRangePicker value={range} onValueChange={setRange} />
+      </div>
+
       {isLoading && <Skeleton className="h-48 w-full" />}
       {isError && <QueryError message="No se pudieron cargar tus transacciones." />}
 
@@ -431,11 +422,28 @@ export default function TransactionsPage() {
                       {tx.type === 'INCOME' ? '+' : '-'}S/ {Number(tx.amount).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <ConfirmDeleteButton
-                        aria-label="Eliminar transacción"
-                        description="Esta transacción se eliminará de forma permanente. Esta acción no se puede deshacer."
-                        onConfirm={() => deleteTransaction.mutate(tx.id)}
-                      />
+                      <div className="flex justify-end">
+                        <EditTransactionDialog
+                          transaction={tx}
+                          accounts={accounts}
+                          groups={groups}
+                          trigger={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Editar transacción"
+                            >
+                              <PencilIcon />
+                            </Button>
+                          }
+                        />
+                        <ConfirmDeleteButton
+                          aria-label="Eliminar transacción"
+                          description="Esta transacción se eliminará de forma permanente. Esta acción no se puede deshacer."
+                          onConfirm={() => deleteTransaction.mutate(tx.id)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
