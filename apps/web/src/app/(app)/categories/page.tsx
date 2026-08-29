@@ -47,9 +47,7 @@ export default function CategoriesPage() {
       <PageHeader
         title="Categorías"
         description="Grupos de ingreso/egreso y sus subcategorías."
-        action={
-          <CategoryGroupFormDialog trigger={<Button type="button" variant="outline">Nuevo grupo</Button>} />
-        }
+        action={<CategoryGroupFormDialog />}
       />
 
       {isLoading && (

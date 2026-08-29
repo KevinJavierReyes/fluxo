@@ -100,7 +100,7 @@ export function CategoryGroupFormDialog({
       trigger={
         trigger ??
         (openProp === undefined ? (
-          <Button type="button" variant="outline">
+          <Button type="button">
             <PlusIcon />
             Nuevo grupo
           </Button>
