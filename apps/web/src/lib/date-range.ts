@@ -30,6 +30,32 @@ export function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** Formatea una fecha UTC-midnight como `dd/mm/aaaa` para edición manual. */
+export function formatInputDate(date: Date): string {
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/** Parsea `dd/mm/aaaa` a una fecha UTC-midnight, o `undefined` si es inválida. */
+export function parseInputDate(text: string): Date | undefined {
+  const match = text.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return undefined;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  const isValid =
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+
+  return isValid ? date : undefined;
+}
+
 export function daysBetween(range: DateRange): number {
   return Math.round((range.to.getTime() - range.from.getTime()) / DAY_MS) + 1;
 }

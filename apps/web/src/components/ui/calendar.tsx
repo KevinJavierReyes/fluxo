@@ -26,7 +26,7 @@ function Calendar({
       className={cn("w-fit p-0", className)}
       classNames={{
         root: cn("w-fit", defaultClassNames.root),
-        months: cn("relative flex flex-col gap-3", defaultClassNames.months),
+        months: cn("relative flex flex-col gap-3 sm:flex-row", defaultClassNames.months),
         month: cn("flex w-full flex-col gap-3", defaultClassNames.month),
         nav: cn(
           "absolute inset-x-0 top-0 flex w-full items-center justify-between",
