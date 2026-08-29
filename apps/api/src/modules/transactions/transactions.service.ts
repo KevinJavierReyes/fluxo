@@ -22,8 +22,16 @@ export class TransactionsService {
   async findAll(userId: string, query: ListTransactionsQueryDto) {
     const where: Prisma.TransactionWhereInput = {
       userId,
-      ...(query.accountId ? { accountId: query.accountId } : {}),
-      ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+      ...(query.accountIds && query.accountIds.length > 0
+        ? { accountId: { in: query.accountIds } }
+        : query.accountId
+          ? { accountId: query.accountId }
+          : {}),
+      ...(query.categoryIds && query.categoryIds.length > 0
+        ? { categoryId: { in: query.categoryIds } }
+        : query.categoryId
+          ? { categoryId: query.categoryId }
+          : {}),
       ...(query.type ? { type: query.type } : {}),
       ...(query.from || query.to
         ? {
@@ -153,5 +161,17 @@ export class TransactionsService {
     await this.findOne(userId, id);
     await this.prisma.transaction.delete({ where: { id } });
     return { id, deleted: true };
+  }
+
+  /**
+   * Sin restricción por `source`: incluye transacciones `RECURRING`, ya que
+   * esta es la vía de limpieza manual para las que quedaron generadas de una
+   * regla recurrente que ya no se quiere (borrar la regla no las elimina).
+   */
+  async removeMany(userId: string, ids: string[]) {
+    const result = await this.prisma.transaction.deleteMany({
+      where: { id: { in: ids }, userId },
+    });
+    return { deletedCount: result.count };
   }
 }

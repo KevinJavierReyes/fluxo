@@ -7,16 +7,22 @@ export function TransactionTypeSelect({
   value,
   onValueChange,
   triggerClassName = 'w-36',
+  allowAll = false,
+  allLabel = 'Todos',
 }: {
-  value: TransactionTypeValue;
-  onValueChange: (value: TransactionTypeValue) => void;
+  value: TransactionTypeValue | 'all';
+  onValueChange: (value: TransactionTypeValue | 'all') => void;
   triggerClassName?: string;
+  /** Agrega una opción "Todos" al inicio, para usar como filtro. */
+  allowAll?: boolean;
+  allLabel?: string;
 }) {
   return (
-    <Select value={value} onValueChange={(v) => onValueChange(v ?? value)}>
+    <Select value={value} onValueChange={(v) => onValueChange((v as TransactionTypeValue | 'all') ?? value)}>
       <SelectTrigger className={triggerClassName}>
         <SelectValue>
-          {(v: TransactionTypeValue) => {
+          {(v: TransactionTypeValue | 'all') => {
+            if (v === 'all') return allLabel;
             const meta = TRANSACTION_TYPE_META[v];
             const Icon = meta.icon;
             return (
@@ -29,6 +35,7 @@ export function TransactionTypeSelect({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
+        {allowAll && <SelectItem value="all">{allLabel}</SelectItem>}
         {(Object.keys(TRANSACTION_TYPE_META) as TransactionTypeValue[]).map((key) => {
           const meta = TRANSACTION_TYPE_META[key];
           const Icon = meta.icon;

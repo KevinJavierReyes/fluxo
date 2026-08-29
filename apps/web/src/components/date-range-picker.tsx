@@ -6,6 +6,8 @@ import type { DateRange as DayPickerRange } from 'react-day-picker';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Popover,
   PopoverContent,
@@ -14,8 +16,10 @@ import {
 import {
   RANGE_PRESETS,
   dateToUtcMidnight,
+  formatInputDate,
   formatRangeLabel,
   matchPreset,
+  parseInputDate,
   shiftRange,
   utcMidnightToLocalDate,
   type DateRange,
@@ -23,7 +27,16 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * `‹ [ 01 mar 2026 – 31 mar 2026 ] ›` con presets y calendario de rango.
+ * `‹ [ 01 mar 2026 – 31 mar 2026 ] ›` con presets, calendario de rango y
+ * entrada manual. Los presets aplican al instante (son una elección de un
+ * solo clic); el calendario y el tipeo manual quedan como borrador hasta
+ * apretar "Confirmar", para no disparar una búsqueda por cada clic/tecla.
+ *
+ * `draftTo` se mantiene `undefined` mientras el rango está a medio elegir:
+ * react-day-picker usa eso (junto con `resetOnSelect`) para decidir si un
+ * clic nuevo completa el rango o empieza uno — si lo forzáramos a un valor
+ * siempre "completo", cada clic quedaría reescribiendo solo el "hasta".
+ *
  * Las flechas no tienen tope hacia adelante: navegar a meses proyectados es
  * parte de lo que queremos permitir.
  */
@@ -35,7 +48,72 @@ export function DateRangePicker({
   onValueChange: (range: DateRange) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [draftFrom, setDraftFrom] = useState<Date>(value.from);
+  const [draftTo, setDraftTo] = useState<Date | undefined>(value.to);
+  const [fromText, setFromText] = useState(() => formatInputDate(value.from));
+  const [toText, setToText] = useState(() => formatInputDate(value.to));
+  const [fromError, setFromError] = useState<string>();
+  const [toError, setToError] = useState<string>();
   const activePreset = matchPreset(value);
+
+  const resetDraft = (range: DateRange) => {
+    setDraftFrom(range.from);
+    setDraftTo(range.to);
+    setFromText(formatInputDate(range.from));
+    setToText(formatInputDate(range.to));
+    setFromError(undefined);
+    setToError(undefined);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) resetDraft(value);
+    setOpen(next);
+  };
+
+  const applyPreset = (range: DateRange) => {
+    onValueChange(range);
+    setOpen(false);
+  };
+
+  const commitFromText = (text: string) => {
+    const parsed = parseInputDate(text);
+    if (!parsed) {
+      setFromError('Fecha inválida');
+      return;
+    }
+    setFromError(undefined);
+    setDraftFrom(parsed);
+  };
+
+  const commitToText = (text: string) => {
+    const parsed = parseInputDate(text);
+    if (!parsed) {
+      setToError('Fecha inválida');
+      return;
+    }
+    setToError(undefined);
+    setDraftTo(parsed);
+  };
+
+  const handleCalendarSelect = (range: DayPickerRange | undefined) => {
+    const from = range?.from ? dateToUtcMidnight(range.from) : undefined;
+    const to = range?.to ? dateToUtcMidnight(range.to) : undefined;
+    setDraftFrom(from ?? draftFrom);
+    setDraftTo(to);
+    setFromText(from ? formatInputDate(from) : '');
+    setToText(to ? formatInputDate(to) : '');
+    setFromError(undefined);
+    setToError(undefined);
+  };
+
+  const rangeInvalid = !!draftTo && draftFrom > draftTo;
+  const canConfirm = !!draftTo && !fromError && !toError && !rangeInvalid;
+
+  const handleConfirm = () => {
+    if (!canConfirm || !draftTo) return;
+    onValueChange({ from: draftFrom, to: draftTo });
+    setOpen(false);
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -49,7 +127,7 @@ export function DateRangePicker({
         <ChevronLeftIcon />
       </Button>
 
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger
           render={
             <Button
@@ -71,34 +149,77 @@ export function DateRangePicker({
                   type="button"
                   size="xs"
                   variant={activePreset === preset.id ? 'default' : 'outline'}
-                  onClick={() => {
-                    onValueChange(preset.build());
-                    setOpen(false);
-                  }}
+                  onClick={() => applyPreset(preset.build())}
                 >
                   {preset.label}
                 </Button>
               ))}
             </div>
+
+            <div className="flex items-start gap-2">
+              <div className="flex flex-1 flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Desde</Label>
+                <Input
+                  value={fromText}
+                  placeholder="dd/mm/aaaa"
+                  aria-invalid={!!fromError}
+                  onChange={(e) => setFromText(e.target.value)}
+                  onBlur={(e) => commitFromText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitFromText(fromText);
+                    }
+                  }}
+                />
+                {fromError && <p className="text-xs text-destructive">{fromError}</p>}
+              </div>
+              <div className="flex flex-1 flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Hasta</Label>
+                <Input
+                  value={toText}
+                  placeholder="dd/mm/aaaa"
+                  aria-invalid={!!toError}
+                  onChange={(e) => setToText(e.target.value)}
+                  onBlur={(e) => commitToText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitToText(toText);
+                    }
+                  }}
+                />
+                {toError && <p className="text-xs text-destructive">{toError}</p>}
+              </div>
+            </div>
+
             <Calendar
               mode="range"
               locale={es}
               numberOfMonths={2}
-              defaultMonth={utcMidnightToLocalDate(value.from)}
+              resetOnSelect
+              defaultMonth={utcMidnightToLocalDate(draftFrom)}
               selected={{
-                from: utcMidnightToLocalDate(value.from),
-                to: utcMidnightToLocalDate(value.to),
+                from: utcMidnightToLocalDate(draftFrom),
+                to: draftTo ? utcMidnightToLocalDate(draftTo) : undefined,
               }}
-              onSelect={(range: DayPickerRange | undefined) => {
-                if (!range?.from) return;
-                onValueChange({
-                  from: dateToUtcMidnight(range.from),
-                  to: dateToUtcMidnight(range.to ?? range.from),
-                });
-                if (range.to) setOpen(false);
-              }}
+              onSelect={handleCalendarSelect}
               className={cn('rdp-range')}
             />
+
+            <div className="flex items-center justify-between gap-2 border-t pt-3">
+              <p className="text-xs text-destructive">
+                {rangeInvalid ? '"Hasta" no puede ser anterior a "Desde".' : ' '}
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" size="sm" disabled={!canConfirm} onClick={handleConfirm}>
+                  Confirmar
+                </Button>
+              </div>
+            </div>
           </div>
         </PopoverContent>
       </Popover>

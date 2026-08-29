@@ -1,4 +1,5 @@
 import {
+  bulkDeleteTransactionsSchema,
   createTransactionSchema,
   listTransactionsQuerySchema,
   updateTransactionSchema,
@@ -13,4 +14,7 @@ export class UpdateTransactionDto extends createZodDto(
 ) {}
 export class ListTransactionsQueryDto extends createZodDto(
   listTransactionsQuerySchema,
+) {}
+export class BulkDeleteTransactionsDto extends createZodDto(
+  bulkDeleteTransactionsSchema,
 ) {}

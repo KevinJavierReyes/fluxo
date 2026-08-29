@@ -50,3 +50,8 @@ export const categoryResponseSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 export type CategoryResponse = z.infer<typeof categoryResponseSchema>;
+
+export const reorderSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+export type ReorderInput = z.infer<typeof reorderSchema>;

@@ -14,10 +14,12 @@ import { PlusIcon } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useCategoryGroups } from '@/hooks/use-categories';
+import { useCategoryTypeSync } from '@/hooks/use-category-type-sync';
 import { useCreateRecurringRule, useUpdateRecurringRule } from '@/hooks/use-recurring-rules';
 import { FormDialog } from '@/components/form-dialog';
 import { CategorySelect } from '@/components/category-select';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -89,6 +91,7 @@ function CreateRecurringRuleDialog({ trigger }: { trigger?: ReactElement }) {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<CreateRecurringRuleInput>({
     resolver: zodResolver(createRecurringRuleSchema),
@@ -96,6 +99,9 @@ function CreateRecurringRuleDialog({ trigger }: { trigger?: ReactElement }) {
   });
 
   const frequency = useWatch({ control, name: 'frequency' });
+  const type = useWatch({ control, name: 'type' });
+  const categoryId = useWatch({ control, name: 'categoryId' });
+  const handleCategoryChange = useCategoryTypeSync({ type, categoryId, groups, setValue });
 
   const onSubmit = handleSubmit(async (values) => {
     await createRule.mutateAsync(values);
@@ -186,8 +192,9 @@ function CreateRecurringRuleDialog({ trigger }: { trigger?: ReactElement }) {
             render={({ field }) => (
               <CategorySelect
                 groups={groups}
+                type={type}
                 value={field.value}
-                onValueChange={field.onChange}
+                onValueChange={(v) => handleCategoryChange(v, field.onChange)}
                 triggerClassName="w-full"
                 ariaInvalid={!!errors.categoryId}
               />
@@ -345,6 +352,13 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
         {scheduleSummary(rule)}
       </div>
 
+      <Alert variant="warning">
+        <AlertDescription>
+          Editar esta regla no modifica las transacciones que ya se generaron. Los cambios (monto, cuenta, categoría,
+          nombre) solo aplican a las próximas transacciones que se generen hacia adelante.
+        </AlertDescription>
+      </Alert>
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="rule-edit-name">Nombre</Label>
         <Input id="rule-edit-name" aria-invalid={!!errors.name} {...register('name')} />
@@ -388,6 +402,7 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
           render={({ field }) => (
             <CategorySelect
               groups={groups}
+              type={rule.type}
               value={field.value ?? ''}
               onValueChange={field.onChange}
               triggerClassName="w-full"

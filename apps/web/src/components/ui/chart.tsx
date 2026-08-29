@@ -31,6 +31,21 @@ export const CHART_AXIS_TICK = {
   fill: CHART_COLORS.axis,
 } as const
 
+/**
+ * Punto de corte (0-1, de arriba hacia abajo) donde una serie cruza el cero,
+ * para usar como offset en un `<linearGradient>` vertical y así pintar la
+ * parte positiva de un color y la negativa de otro. Ver ejemplo oficial de
+ * Recharts "Area Chart Fill By Value".
+ */
+export function zeroCrossingOffset(values: number[]): number {
+  if (values.length === 0) return 1
+  const max = Math.max(...values)
+  const min = Math.min(...values)
+  if (max <= 0) return 0
+  if (min >= 0) return 1
+  return max / (max - min)
+}
+
 function ChartContainer({
   height = 260,
   className,

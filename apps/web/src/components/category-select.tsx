@@ -1,3 +1,4 @@
+import type { TransactionType } from '@fluxo/shared';
 import {
   Select,
   SelectContent,
@@ -8,25 +9,35 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { GroupChip } from '@/components/group-chip';
+import { filterGroupsByType } from '@/lib/category-type';
 import type { CategoryGroup } from '@/lib/types';
 
 export function CategorySelect({
   groups,
+  type,
   value,
   onValueChange,
   placeholder = 'Selecciona',
   triggerClassName = 'w-52',
   ariaInvalid,
+  allowAll = false,
+  allLabel = 'Todas',
 }: {
   groups: CategoryGroup[] | undefined;
+  /** Si se pasa, solo se muestran las categorías de grupos de este tipo (ingreso/egreso). */
+  type?: TransactionType;
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
   triggerClassName?: string;
   ariaInvalid?: boolean;
+  /** Agrega una opción "Todas" al inicio, para usar como filtro. */
+  allowAll?: boolean;
+  allLabel?: string;
 }) {
+  const filteredGroups = filterGroupsByType(groups, type);
   const entryById = new Map(
-    groups?.flatMap((group) =>
+    filteredGroups?.flatMap((group) =>
       group.categories.map((category) => [category.id, { category, group }] as const),
     ) ?? [],
   );
@@ -36,6 +47,7 @@ export function CategorySelect({
       <SelectTrigger className={triggerClassName} aria-invalid={ariaInvalid}>
         <SelectValue placeholder={placeholder}>
           {(v: string) => {
+            if (v === 'all') return allLabel;
             const entry = entryById.get(v);
             if (!entry) return undefined;
             return (
@@ -48,7 +60,8 @@ export function CategorySelect({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {groups?.map((group) => (
+        {allowAll && <SelectItem value="all">{allLabel}</SelectItem>}
+        {filteredGroups?.map((group) => (
           <SelectGroup key={group.id}>
             <SelectLabel className="flex items-center gap-1.5">
               <GroupChip color={group.color} icon={group.icon} size="sm" />

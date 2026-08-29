@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import {
+  BulkDeleteTransactionsDto,
   CreateTransactionDto,
   ListTransactionsQueryDto,
   UpdateTransactionDto,
@@ -61,5 +62,13 @@ export class TransactionsController {
   @Delete(':id')
   remove(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
     return this.transactionsService.remove(user.id, id);
+  }
+
+  @Post('bulk-delete')
+  removeMany(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: BulkDeleteTransactionsDto,
+  ) {
+    return this.transactionsService.removeMany(user.id, dto.ids);
   }
 }

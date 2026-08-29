@@ -75,3 +75,50 @@ export function useDeleteCategory() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.categoryGroups }),
   });
 }
+
+export function useReorderCategoryGroups() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => apiClient.patch('/categories/groups/reorder', { ids }),
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.categoryGroups });
+      const previous = queryClient.getQueryData<CategoryGroup[]>(queryKeys.categoryGroups);
+      if (previous) {
+        const byId = new Map(previous.map((g) => [g.id, g]));
+        const reordered = ids.map((id) => byId.get(id)).filter((g): g is CategoryGroup => !!g);
+        queryClient.setQueryData(queryKeys.categoryGroups, reordered);
+      }
+      return { previous };
+    },
+    onError: (_err, _ids, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.categoryGroups, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.categoryGroups }),
+  });
+}
+
+export function useReorderCategories() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids }: { groupId: string; ids: string[] }) =>
+      apiClient.patch('/categories/reorder', { ids }),
+    onMutate: async ({ groupId, ids }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.categoryGroups });
+      const previous = queryClient.getQueryData<CategoryGroup[]>(queryKeys.categoryGroups);
+      if (previous) {
+        const next = previous.map((group) => {
+          if (group.id !== groupId) return group;
+          const byId = new Map(group.categories.map((c) => [c.id, c]));
+          const reordered = ids.map((id) => byId.get(id)).filter((c): c is Category => !!c);
+          return { ...group, categories: reordered };
+        });
+        queryClient.setQueryData(queryKeys.categoryGroups, next);
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.categoryGroups, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.categoryGroups }),
+  });
+}

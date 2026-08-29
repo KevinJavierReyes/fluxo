@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { MenuIcon, Wallet2Icon } from 'lucide-react';
+import { MenuIcon } from 'lucide-react';
 import { AppSidebar } from '@/components/app-sidebar';
 import { NavList } from '@/components/nav-list';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -22,7 +23,7 @@ export function AppShell({ userEmail, children }: { userEmail: string; children:
       <div className="flex min-h-screen flex-1 flex-col">
         <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur-sm md:hidden">
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-            <Wallet2Icon className="size-5 text-primary" />
+            <Image src="/logo.png" alt="Fluxo" width={45} height={50} className="h-5 w-auto shrink-0" />
             Fluxo
           </Link>
           <div className="flex items-center gap-1">
@@ -38,7 +39,7 @@ export function AppShell({ userEmail, children }: { userEmail: string; children:
               <SheetContent side="left" className="flex w-72 flex-col">
                 <SheetHeader>
                   <SheetTitle className="flex items-center gap-2">
-                    <Wallet2Icon className="size-5 text-primary" />
+                    <Image src="/logo.png" alt="Fluxo" width={45} height={50} className="h-5 w-auto shrink-0" />
                     Fluxo
                   </SheetTitle>
                 </SheetHeader>

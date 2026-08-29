@@ -72,6 +72,18 @@ export class CategoriesService {
     return this.findGroup(userId, id);
   }
 
+  async reorderGroups(userId: string, ids: string[]) {
+    await this.prisma.$transaction(
+      ids.map((id, index) =>
+        this.prisma.categoryGroup.updateMany({
+          where: { id, userId },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+    return { success: true };
+  }
+
   async removeGroup(userId: string, id: string) {
     await this.findGroup(userId, id);
 
@@ -146,6 +158,18 @@ export class CategoriesService {
       });
     }
     return category;
+  }
+
+  async reorderCategories(userId: string, ids: string[]) {
+    await this.prisma.$transaction(
+      ids.map((id, index) =>
+        this.prisma.category.updateMany({
+          where: { id, userId },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+    return { success: true };
   }
 
   async update(userId: string, id: string, dto: UpdateCategoryDto) {
