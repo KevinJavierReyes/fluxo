@@ -138,5 +138,8 @@
   }
   html {
     @apply font-sans;
+    /* Evita que un doble-tap accidental sobre botones/chips dispare el zoom
+       nativo del navegador — deja el pellizco para zoom intencional (accesibilidad). */
+    touch-action: manipulation;
   }
 }
