@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronsLeftIcon, ChevronsRightIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { APP_VERSION } from '@/lib/version';
 import { NavList } from '@/components/nav-list';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Separator } from '@/components/ui/separator';
@@ -43,9 +44,12 @@ export function AppSidebar({
           <LogoutButton collapsed={collapsed} />
         </div>
         {!collapsed && (
-          <p className="truncate px-1 text-xs text-muted-foreground" title={userEmail}>
-            {userEmail}
-          </p>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <p className="truncate text-xs text-muted-foreground" title={userEmail}>
+              {userEmail}
+            </p>
+            <p className="shrink-0 text-xs text-muted-foreground">v{APP_VERSION}</p>
+          </div>
         )}
         <Button
           type="button"

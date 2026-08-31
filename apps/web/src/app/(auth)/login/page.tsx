@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/client';
+import { APP_VERSION } from '@/lib/version';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -83,6 +84,7 @@ export default function LoginPage() {
           Regístrate
         </Link>
       </p>
+      <p className="text-xs text-muted-foreground">v{APP_VERSION}</p>
     </main>
   );
 }
