@@ -42,7 +42,7 @@ function ContributeRow({ goalId }: { goalId: string }) {
       }
     >
       <Select value={accountId} onValueChange={(value) => setAccountId(value ?? '')}>
-        <SelectTrigger size="sm" className="w-32">
+        <SelectTrigger size="sm" className="w-full sm:w-32">
           <SelectValue placeholder="Cuenta">{(value: string) => accounts?.find((a) => a.id === value)?.name}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -59,9 +59,9 @@ function ContributeRow({ goalId }: { goalId: string }) {
         placeholder="Monto"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
-        className="w-24"
+        className="w-full sm:w-24"
       />
-      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full sm:w-40" />
     </InlineActionRow>
   );
 }
@@ -103,8 +103,8 @@ export default function SavingsGoalsPage() {
           return (
             <Card key={goal.id}>
               <CardContent className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <p className="font-medium">{goal.name}</p>
                     <p className="text-sm text-muted-foreground">
                       S/ {goal.progress.toFixed(2)} de S/ {target.toFixed(2)}

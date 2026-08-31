@@ -17,12 +17,14 @@ export default function IntegrationsPage() {
       />
 
       <Tabs defaultValue="general">
-        <TabsList>
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="connections">Apps conectadas</TabsTrigger>
-          <TabsTrigger value="tokens">Tokens</TabsTrigger>
-          <TabsTrigger value="activity">Actividad</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList>
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="connections">Apps conectadas</TabsTrigger>
+            <TabsTrigger value="tokens">Tokens</TabsTrigger>
+            <TabsTrigger value="activity">Actividad</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="general" className="flex flex-col gap-6">
           <McpGeneralSettingsCard />

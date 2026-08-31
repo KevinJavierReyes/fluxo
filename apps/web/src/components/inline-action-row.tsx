@@ -19,7 +19,7 @@ export function InlineActionRow({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {children}
-      <Button type="button" size="sm" disabled={disabled || pending} onClick={onSubmit}>
+      <Button type="button" size="sm" className="w-full sm:w-auto" disabled={disabled || pending} onClick={onSubmit}>
         {submitLabel}
       </Button>
       {error && <p className="w-full text-sm text-destructive">{error}</p>}

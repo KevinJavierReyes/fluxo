@@ -44,11 +44,11 @@ export default function AccountsPage() {
             {accounts.map((account) => (
               <div
                 key={account.id}
-                className="flex items-center justify-between px-4 py-3 first:pt-4 last:pb-4"
+                className="flex flex-col gap-2 px-4 py-3 first:pt-4 last:pb-4 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex flex-col gap-1">
-                  <p className="font-medium">{account.name}</p>
-                  <div className="flex items-center gap-2">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <p className="truncate font-medium">{account.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">
                       {ACCOUNT_TYPE_LABELS[account.type]}
                     </Badge>
@@ -57,7 +57,7 @@ export default function AccountsPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 self-end sm:self-auto">
                   <AccountFormDialog
                     account={account}
                     trigger={

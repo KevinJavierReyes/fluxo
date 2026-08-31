@@ -60,8 +60,8 @@ export default function BudgetsPage() {
           return (
             <Card key={budget.id}>
               <CardContent className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <p className="flex items-center gap-1.5 font-medium">
                       {group && <GroupChip color={group.color} icon={group.icon} size="sm" />}
                       {group?.name ?? '—'}

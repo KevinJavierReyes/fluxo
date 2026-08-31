@@ -22,7 +22,7 @@ export function SortableCategoryRow({ category }: { category: Category }) {
       className="flex items-center justify-between px-4 py-2"
       data-dragging={isDragging || undefined}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
           className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
@@ -32,7 +32,7 @@ export function SortableCategoryRow({ category }: { category: Category }) {
         >
           <GripVerticalIcon className="size-4" />
         </button>
-        <span className="text-sm">{category.name}</span>
+        <span className="truncate text-sm">{category.name}</span>
       </div>
       <div className="flex items-center gap-1">
         <CategoryFormDialog

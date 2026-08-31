@@ -59,7 +59,7 @@ function LinkRecurringRow({ obligationId }: { obligationId: string }) {
         }
       >
         <Select value={accountId} onValueChange={(value) => setAccountId(value ?? '')}>
-          <SelectTrigger size="sm" className="w-32">
+          <SelectTrigger size="sm" className="w-full sm:w-32">
             <SelectValue placeholder="Cuenta">{(value: string) => accounts?.find((a) => a.id === value)?.name}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -76,7 +76,7 @@ function LinkRecurringRow({ obligationId }: { obligationId: string }) {
           value={categoryId}
           onValueChange={(value) => setCategoryId(value ?? '')}
           placeholder="Categoría"
-          triggerClassName="w-44"
+          triggerClassName="w-full sm:w-44"
         />
         <Input
           type="number"
@@ -84,10 +84,15 @@ function LinkRecurringRow({ obligationId }: { obligationId: string }) {
           max={31}
           value={byMonthDay}
           onChange={(e) => setByMonthDay(e.target.value)}
-          className="w-16"
+          className="w-full sm:w-16"
           title="Día del mes"
         />
-        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-40" />
+        <Input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="w-full sm:w-40"
+        />
       </InlineActionRow>
     </div>
   );
@@ -126,8 +131,8 @@ export default function ObligationsPage() {
         {obligations?.map((obligation) => (
           <Card key={obligation.id}>
             <CardContent className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <p className={`font-medium ${obligation.isPaidOff ? 'text-muted-foreground line-through' : ''}`}>
                     {obligation.creditorName}
                   </p>
@@ -141,7 +146,7 @@ export default function ObligationsPage() {
                     <p className="text-sm text-muted-foreground">{obligation.description}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <label className="flex items-center gap-1.5 text-sm">
                     <Checkbox
                       checked={obligation.isPaidOff}

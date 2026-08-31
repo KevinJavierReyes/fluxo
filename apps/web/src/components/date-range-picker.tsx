@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { es } from 'react-day-picker/locale';
 import type { DateRange as DayPickerRange } from 'react-day-picker';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
@@ -48,6 +48,16 @@ export function DateRangePicker({
   onValueChange: (range: DateRange) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // A 2 meses el calendario desborda el popover en pantallas angostas (<640px);
+  // se reduce a 1 mes ahí y se apoya en los inputs "Desde/Hasta" para el resto del rango.
+  const [calendarMonths, setCalendarMonths] = useState(2);
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 640px)');
+    const update = () => setCalendarMonths(mql.matches ? 2 : 1);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
   const [draftFrom, setDraftFrom] = useState<Date>(value.from);
   const [draftTo, setDraftTo] = useState<Date | undefined>(value.to);
   const [fromText, setFromText] = useState(() => formatInputDate(value.from));
@@ -140,7 +150,7 @@ export function DateRangePicker({
           <span>{formatRangeLabel(value)}</span>
           <CalendarIcon className="text-muted-foreground" />
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-auto">
+        <PopoverContent align="end" className="w-[min(92vw,20rem)] sm:w-auto">
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-1.5">
               {RANGE_PRESETS.map((preset) => (
@@ -196,7 +206,7 @@ export function DateRangePicker({
             <Calendar
               mode="range"
               locale={es}
-              numberOfMonths={2}
+              numberOfMonths={calendarMonths}
               resetOnSelect
               defaultMonth={utcMidnightToLocalDate(draftFrom)}
               selected={{

@@ -43,9 +43,12 @@ export default function AssetsPage() {
         <Card>
           <CardContent className="divide-y p-0">
             {assets.map((asset) => (
-              <div key={asset.id} className="flex items-center justify-between px-4 py-3 first:pt-4 last:pb-4">
-                <div>
-                  <p className={`font-medium ${asset.isSold ? 'text-muted-foreground line-through' : ''}`}>
+              <div
+                key={asset.id}
+                className="flex flex-col gap-2 px-4 py-3 first:pt-4 last:pb-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className={`truncate font-medium ${asset.isSold ? 'text-muted-foreground line-through' : ''}`}>
                     {asset.name}
                   </p>
                   <p className="text-sm text-muted-foreground">
@@ -54,7 +57,7 @@ export default function AssetsPage() {
                   </p>
                   {asset.notes && <p className="text-sm text-muted-foreground">{asset.notes}</p>}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
                   <label className="flex items-center gap-1.5 text-sm">
                     <Checkbox
                       checked={asset.isSold}

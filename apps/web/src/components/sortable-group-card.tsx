@@ -64,8 +64,8 @@ export function SortableGroupCard({
       style={{ transform: CSS.Translate.toString(transform), transition }}
       data-dragging={isDragging || undefined}
     >
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
             className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
@@ -76,7 +76,7 @@ export function SortableGroupCard({
             <GripVerticalIcon className="size-4" />
           </button>
           <GroupChip color={group.color} icon={group.icon} />
-          <span className="font-medium">{group.name}</span>
+          <span className="truncate font-medium">{group.name}</span>
           <Badge variant={meta.variant}>
             <Icon data-icon="inline-start" />
             {meta.label}

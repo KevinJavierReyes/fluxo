@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { MCP_SCOPE_META } from '@/lib/mcp-scopes';
 import type { CreatedMcpPat } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 const EXPIRY_OPTIONS = [
   { label: '30 días', value: '30' },
@@ -90,7 +91,14 @@ export function CreatePatDialog() {
           </Button>
         }
       />
-      <DialogContent>
+      <DialogContent
+        className={cn(
+          // Igual que form-dialog.tsx: en móvil se comporta como hoja inferior en vez de
+          // modal centrado; !important porque el orden del CSS generado no garantiza que
+          // max-sm: gane sobre las clases base (w-[calc(...)], top-1/2, etc.).
+          'max-sm:top-auto! max-sm:left-0! max-sm:w-full! max-sm:max-w-none! max-sm:translate-x-0! max-sm:translate-y-0! max-sm:rounded-b-none max-sm:inset-x-0! max-sm:bottom-0! max-sm:max-h-[92dvh]!',
+        )}
+      >
         {created ? (
           <>
             <DialogHeader>

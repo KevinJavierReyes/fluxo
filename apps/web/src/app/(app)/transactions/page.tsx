@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createTransactionSchema, TransactionType, type CreateTransactionInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
+import { CalendarIcon, FilterIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { es } from 'react-day-picker/locale';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/empty-state';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { EditTransactionDialog } from '@/components/edit-transaction-dialog';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,6 +91,11 @@ export default function TransactionsPage() {
     filterAccountIds.length > 0 ||
     filterCategoryIds.length > 0 ||
     debouncedSearch !== '';
+  const activeFilterCount =
+    (filterType !== 'all' ? 1 : 0) +
+    (filterAccountIds.length > 0 ? 1 : 0) +
+    (filterCategoryIds.length > 0 ? 1 : 0) +
+    (debouncedSearch !== '' ? 1 : 0);
 
   const clearFilters = () => {
     setFilterType('all');
@@ -118,6 +124,7 @@ export default function TransactionsPage() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // La lista visible cambia con estos filtros, así que la selección deja de
   // tener sentido; se resetea durante el render (no en un efecto) siguiendo
@@ -383,22 +390,26 @@ export default function TransactionsPage() {
             </div>
           )}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
-            <FormField label="Tipo">
+            <FormField label="Tipo" className="w-full sm:w-auto">
               <Controller
                 name="type"
                 control={control}
                 render={({ field }) => (
-                  <TransactionTypeSelect value={field.value} onValueChange={field.onChange} triggerClassName="w-36" />
+                  <TransactionTypeSelect
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    triggerClassName="w-full sm:w-36"
+                  />
                 )}
               />
             </FormField>
-            <FormField label="Cuenta" error={errors.accountId?.message}>
+            <FormField label="Cuenta" error={errors.accountId?.message} className="w-full sm:w-auto">
               <Controller
                 name="accountId"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-40" aria-invalid={!!errors.accountId}>
+                    <SelectTrigger className="w-full sm:w-40" aria-invalid={!!errors.accountId}>
                       <SelectValue placeholder="Selecciona">
                         {(value: string) => accountById.get(value)}
                       </SelectValue>
@@ -414,7 +425,7 @@ export default function TransactionsPage() {
                 )}
               />
             </FormField>
-            <FormField label="Categoría" error={errors.categoryId?.message}>
+            <FormField label="Categoría" error={errors.categoryId?.message} className="w-full sm:w-auto">
               <Controller
                 name="categoryId"
                 control={control}
@@ -424,22 +435,22 @@ export default function TransactionsPage() {
                     type={type}
                     value={field.value}
                     onValueChange={(v) => handleCategoryChange(v, field.onChange)}
-                    triggerClassName="w-52"
+                    triggerClassName="w-full sm:w-52"
                     ariaInvalid={!!errors.categoryId}
                   />
                 )}
               />
             </FormField>
-            <FormField label="Monto" error={errors.amount?.message}>
+            <FormField label="Monto" error={errors.amount?.message} className="w-full sm:w-auto">
               <Input
                 type="number"
                 step="0.01"
-                className="w-28"
+                className="w-full sm:w-28"
                 aria-invalid={!!errors.amount}
                 {...register('amount')}
               />
             </FormField>
-            <FormField label="Fecha" error={errors.date?.message}>
+            <FormField label="Fecha" error={errors.date?.message} className="w-full sm:w-auto">
               <Controller
                 name="date"
                 control={control}
@@ -450,7 +461,7 @@ export default function TransactionsPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="w-36 justify-start font-normal"
+                          className="w-full justify-start font-normal sm:w-36"
                           aria-invalid={!!errors.date}
                         />
                       }
@@ -476,16 +487,20 @@ export default function TransactionsPage() {
                 )}
               />
             </FormField>
-            <FormField label="Descripción" error={errors.description?.message} className="min-w-[220px] flex-1">
+            <FormField
+              label="Descripción"
+              error={errors.description?.message}
+              className="w-full min-w-0 sm:min-w-[220px] sm:flex-1"
+            >
               <Input aria-invalid={!!errors.description} {...register('description')} />
             </FormField>
-            <div className="flex flex-col gap-1.5">
-              <Label className="invisible">Acción</Label>
-              <Button type="submit" disabled={isSubmitting}>
+            <div className="flex w-full flex-col gap-1.5 sm:w-auto">
+              <Label className="invisible max-sm:hidden">Acción</Label>
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                 <PlusIcon />
                 Registrar
               </Button>
-              <p className="min-h-5" aria-hidden="true" />
+              <p className="min-h-5 max-sm:hidden" aria-hidden="true" />
             </div>
             {createTransaction.isError && (
               <p className="w-full text-sm text-destructive">{createTransaction.error.message}</p>
@@ -499,7 +514,7 @@ export default function TransactionsPage() {
         <DateRangePicker value={range} onValueChange={setRange} />
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="hidden flex-wrap items-end gap-3 md:flex">
         <FormField label="Tipo">
           <TransactionTypeSelect
             value={filterType}
@@ -565,10 +580,104 @@ export default function TransactionsPage() {
         )}
       </div>
 
+      <div className="flex items-center gap-2 md:hidden">
+        <Input
+          placeholder="Buscar por descripción…"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="flex-1"
+        />
+        <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+          <SheetTrigger
+            render={
+              <Button type="button" variant="outline" className="shrink-0">
+                <FilterIcon />
+                Filtros
+                {activeFilterCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            }
+          />
+          <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Filtros</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col gap-4 px-4">
+              <FormField label="Tipo">
+                <TransactionTypeSelect
+                  value={filterType}
+                  onValueChange={setFilterType}
+                  triggerClassName="w-full"
+                  allowAll
+                  allLabel="Todos los tipos"
+                />
+              </FormField>
+              <FormField label="Cuenta">
+                <MultiSelectPopover
+                  groups={[
+                    {
+                      id: 'accounts',
+                      items: (accounts ?? []).map((account) => ({ id: account.id, label: account.name })),
+                    },
+                  ]}
+                  selectedIds={filterAccountIds}
+                  onValueChange={setFilterAccountIds}
+                  allLabel="Todas las cuentas"
+                  triggerClassName="w-full"
+                />
+              </FormField>
+              <FormField label="Categoría">
+                <MultiSelectPopover
+                  groups={(filterGroupsByType(groups, filterType === 'all' ? undefined : filterType) ?? []).map(
+                    (group) => ({
+                      id: group.id,
+                      header: (
+                        <span className="flex items-center gap-1.5">
+                          <GroupChip color={group.color} icon={group.icon} size="sm" />
+                          {group.name}
+                        </span>
+                      ),
+                      items: group.categories.map((category) => ({
+                        id: category.id,
+                        label: category.name,
+                        content: (
+                          <>
+                            <GroupChip color={group.color} icon={group.icon} size="sm" />
+                            {category.name}
+                          </>
+                        ),
+                      })),
+                    }),
+                  )}
+                  selectedIds={filterCategoryIds}
+                  onValueChange={setFilterCategoryIds}
+                  allLabel="Todas las categorías"
+                  triggerClassName="w-full"
+                />
+              </FormField>
+            </div>
+            <SheetFooter>
+              {hasActiveFilters && (
+                <Button type="button" variant="ghost" onClick={clearFilters}>
+                  <XIcon />
+                  Limpiar filtros
+                </Button>
+              )}
+              <Button type="button" onClick={() => setMobileFiltersOpen(false)}>
+                Ver resultados
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      </div>
+
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-2">
           <p className="text-sm text-muted-foreground">{selectedIds.size} transacción(es) seleccionada(s)</p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
               Deseleccionar
             </Button>
@@ -609,7 +718,8 @@ export default function TransactionsPage() {
       )}
 
       {transactions && transactions.length > 0 && (
-        <Card className="py-0">
+        <>
+        <Card className="hidden py-0 md:block">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -708,6 +818,81 @@ export default function TransactionsPage() {
             </Table>
           </CardContent>
         </Card>
+
+        <div className="flex flex-col gap-4 md:hidden">
+          <label className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
+            <Checkbox
+              aria-label="Seleccionar todas"
+              checked={allVisibleSelected}
+              onCheckedChange={(checked) => toggleSelectAll(checked === true)}
+            />
+            Seleccionar todas
+          </label>
+          {dateGroups.map((group) => (
+            <div key={group.date} className="flex flex-col gap-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-sm font-medium text-muted-foreground">{formatLongDate(group.date)}</span>
+                <span className="text-sm font-medium text-muted-foreground">
+                  {formatSignedCurrency(group.total)}
+                </span>
+              </div>
+              {group.transactions.map((tx) => {
+                const cat = categoryById.get(tx.categoryId);
+                const accountName = accountById.get(tx.accountId);
+                const signedAmount = tx.type === 'INCOME' ? tx.amount : -tx.amount;
+                return (
+                  <Card key={tx.id} className="py-3">
+                    <CardContent className="flex items-start gap-3">
+                      <Checkbox
+                        className="mt-1"
+                        aria-label="Seleccionar transacción"
+                        checked={selectedIds.has(tx.id)}
+                        onCheckedChange={(checked) => toggleSelectRow(tx.id, checked === true)}
+                      />
+                      {cat && <GroupChip color={cat.groupColor} icon={cat.groupIcon} size="sm" />}
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="min-w-0 truncate font-medium">{cat?.name ?? '—'}</span>
+                          <span
+                            className={`shrink-0 font-medium ${tx.type === 'INCOME' ? 'text-success' : 'text-destructive'}`}
+                          >
+                            {formatSignedCurrency(signedAmount)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {tx.description && <span className="truncate">{tx.description}</span>}
+                          {accountName && (
+                            <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+                              {accountName}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-1 flex justify-end gap-1">
+                          <EditTransactionDialog
+                            transaction={tx}
+                            accounts={accounts}
+                            groups={groups}
+                            trigger={
+                              <Button type="button" variant="ghost" size="icon-sm" aria-label="Editar transacción">
+                                <PencilIcon />
+                              </Button>
+                            }
+                          />
+                          <ConfirmDeleteButton
+                            aria-label="Eliminar transacción"
+                            description="Esta transacción se eliminará de forma permanente. Esta acción no se puede deshacer."
+                            onConfirm={() => deleteTransaction.mutate(tx.id)}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        </>
       )}
     </div>
   );

@@ -38,7 +38,7 @@ function ApplyRow({ templateId }: { templateId: string }) {
         applyTemplate.mutate({ id: templateId, input: { date: new Date(`${date}T00:00:00Z`) } })
       }
     >
-      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full sm:w-40" />
     </InlineActionRow>
   );
 }
