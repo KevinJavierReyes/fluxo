@@ -20,7 +20,7 @@ export function LogoutButton({ collapsed = false }: { collapsed?: boolean }) {
       type="button"
       variant="ghost"
       size={collapsed ? 'icon' : 'sm'}
-      className={collapsed ? undefined : 'w-full justify-start gap-2'}
+      className={collapsed ? undefined : 'min-w-0 flex-1 justify-start gap-2'}
       onClick={onLogout}
     >
       <LogOutIcon />
