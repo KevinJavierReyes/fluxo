@@ -141,5 +141,8 @@
     /* Evita que un doble-tap accidental sobre botones/chips dispare el zoom
        nativo del navegador — deja el pellizco para zoom intencional (accesibilidad). */
     touch-action: manipulation;
+    /* Red de seguridad: si algo adentro se desborda igual, que quede contenido
+       en vez de romper la pagina entera con scroll horizontal. */
+    overflow-x: hidden;
   }
 }

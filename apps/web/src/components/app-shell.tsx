@@ -17,11 +17,11 @@ export function AppShell({ userEmail, children }: { userEmail: string; children:
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen min-w-0">
       <AppSidebar userEmail={userEmail} collapsed={collapsed} onToggleCollapsed={() => setCollapsed((v) => !v)} />
 
-      <div className="flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur-sm md:hidden">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 flex h-14 min-w-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur-sm md:hidden">
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
             <Image src="/logo.png" alt="Fluxo" width={45} height={50} className="h-5 w-auto shrink-0" />
             Fluxo
@@ -56,7 +56,7 @@ export function AppShell({ userEmail, children }: { userEmail: string; children:
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );
