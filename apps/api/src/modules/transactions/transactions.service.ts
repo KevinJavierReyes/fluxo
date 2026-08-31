@@ -49,11 +49,13 @@ export class TransactionsService {
     };
 
     // Se pide una fila de más para saber si hay siguiente página sin un
-    // segundo round-trip; el cursor se posiciona por (date, id) porque el
-    // orden principal (date) no es único por sí solo.
+    // segundo round-trip; el desempate de (date, createdAt) explicita el
+    // orden de creación dentro de un mismo día. El cursor sigue posicionado
+    // por `id` porque es el campo único que Prisma exige para paginar, sin
+    // relación con el criterio de orden.
     const rows = await this.prisma.transaction.findMany({
       where,
-      orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       take: query.limit + 1,
       include: {
         account: { select: { name: true } },

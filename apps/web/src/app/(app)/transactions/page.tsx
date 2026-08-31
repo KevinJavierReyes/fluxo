@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createTransactionSchema, TransactionType, type CreateTransactionInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
@@ -16,7 +16,7 @@ import {
   useDeleteTransaction,
   useTransactions,
 } from '@/hooks/use-transactions';
-import type { ExpenseTemplate } from '@/lib/types';
+import type { ExpenseTemplate, Transaction } from '@/lib/types';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
@@ -44,8 +44,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TRANSACTION_TYPE_META } from '@/lib/transaction-type';
 import { filterGroupsByType, findCategoryGroupType } from '@/lib/category-type';
+import { formatLongDate, formatSignedCurrency } from '@/lib/format';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
 import { CategorySelect } from '@/components/category-select';
 import { MultiSelectPopover } from '@/components/multi-select-popover';
@@ -152,6 +152,24 @@ export default function TransactionsPage() {
       ] as const),
     ) ?? [],
   );
+
+  // `transactions` ya viene ordenado por fecha desc desde la API, así que las
+  // filas de un mismo día son consecutivas: basta un solo recorrido lineal.
+  const dateGroups = useMemo(() => {
+    if (!transactions) return [];
+    const result: { date: string; total: number; transactions: Transaction[] }[] = [];
+    for (const tx of transactions) {
+      const signedAmount = tx.type === 'INCOME' ? tx.amount : -tx.amount;
+      const last = result[result.length - 1];
+      if (last && last.date === tx.date) {
+        last.total += signedAmount;
+        last.transactions.push(tx);
+      } else {
+        result.push({ date: tx.date, total: signedAmount, transactions: [tx] });
+      }
+    }
+    return result;
+  }, [transactions]);
 
   const {
     register,
@@ -603,84 +621,88 @@ export default function TransactionsPage() {
                       onCheckedChange={(checked) => toggleSelectAll(checked === true)}
                     />
                   </TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Cuenta</TableHead>
-                  <TableHead>Categoría</TableHead>
-                  <TableHead>Descripción</TableHead>
+                  <TableHead>Transacción</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="pl-4">
-                      <Checkbox
-                        aria-label="Seleccionar transacción"
-                        checked={selectedIds.has(tx.id)}
-                        onCheckedChange={(checked) => toggleSelectRow(tx.id, checked === true)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {new Date(tx.date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const meta = TRANSACTION_TYPE_META[tx.type];
-                        const Icon = meta.icon;
-                        return (
-                          <Badge variant={meta.variant}>
-                            <Icon data-icon="inline-start" />
-                            {meta.label}
-                          </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>{accountById.get(tx.accountId) ?? '—'}</TableCell>
-                    <TableCell>
-                      {(() => {
-                        const cat = categoryById.get(tx.categoryId);
-                        if (!cat) return '—';
-                        return (
-                          <span className="flex items-center gap-1.5">
-                            <GroupChip color={cat.groupColor} icon={cat.groupIcon} size="sm" />
-                            {cat.name}
+                {dateGroups.map((group) => (
+                  <Fragment key={group.date}>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableCell colSpan={4} className="py-2 pl-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {formatLongDate(group.date)}
                           </span>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>{tx.description ?? '—'}</TableCell>
-                    <TableCell
-                      className={`text-right font-medium ${tx.type === 'INCOME' ? 'text-success' : 'text-destructive'}`}
-                    >
-                      {tx.type === 'INCOME' ? '+' : '-'}S/ {Number(tx.amount).toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end">
-                        <EditTransactionDialog
-                          transaction={tx}
-                          accounts={accounts}
-                          groups={groups}
-                          trigger={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Editar transacción"
-                            >
-                              <PencilIcon />
-                            </Button>
-                          }
-                        />
-                        <ConfirmDeleteButton
-                          aria-label="Eliminar transacción"
-                          description="Esta transacción se eliminará de forma permanente. Esta acción no se puede deshacer."
-                          onConfirm={() => deleteTransaction.mutate(tx.id)}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {formatSignedCurrency(group.total)}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {group.transactions.map((tx) => {
+                      const cat = categoryById.get(tx.categoryId);
+                      const accountName = accountById.get(tx.accountId);
+                      const signedAmount = tx.type === 'INCOME' ? tx.amount : -tx.amount;
+                      return (
+                        <TableRow key={tx.id}>
+                          <TableCell className="pl-4">
+                            <Checkbox
+                              aria-label="Seleccionar transacción"
+                              checked={selectedIds.has(tx.id)}
+                              onCheckedChange={(checked) => toggleSelectRow(tx.id, checked === true)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {cat && <GroupChip color={cat.groupColor} icon={cat.groupIcon} size="sm" />}
+                              <div className="flex min-w-0 flex-col gap-0.5">
+                                <span className="font-medium">{cat?.name ?? '—'}</span>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  {tx.description && <span className="truncate">{tx.description}</span>}
+                                  {accountName && (
+                                    <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+                                      {accountName}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-medium ${tx.type === 'INCOME' ? 'text-success' : 'text-destructive'}`}
+                          >
+                            {formatSignedCurrency(signedAmount)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end">
+                              <EditTransactionDialog
+                                transaction={tx}
+                                accounts={accounts}
+                                groups={groups}
+                                trigger={
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="Editar transacción"
+                                  >
+                                    <PencilIcon />
+                                  </Button>
+                                }
+                              />
+                              <ConfirmDeleteButton
+                                aria-label="Eliminar transacción"
+                                description="Esta transacción se eliminará de forma permanente. Esta acción no se puede deshacer."
+                                onConfirm={() => deleteTransaction.mutate(tx.id)}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>
