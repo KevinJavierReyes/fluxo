@@ -126,11 +126,12 @@ export function DateRangePicker({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex w-full items-center gap-2 sm:w-auto">
       <Button
         type="button"
         variant="outline"
         size="icon"
+        className="shrink-0"
         aria-label="Periodo anterior"
         onClick={() => onValueChange(shiftRange(value, -1))}
       >
@@ -143,12 +144,12 @@ export function DateRangePicker({
             <Button
               type="button"
               variant="outline"
-              className="min-w-[260px] justify-between font-normal"
+              className="min-w-0 flex-1 justify-between font-normal sm:min-w-[260px] sm:flex-none"
             />
           }
         >
-          <span>{formatRangeLabel(value)}</span>
-          <CalendarIcon className="text-muted-foreground" />
+          <span className="min-w-0 truncate">{formatRangeLabel(value)}</span>
+          <CalendarIcon className="shrink-0 text-muted-foreground" />
         </PopoverTrigger>
         <PopoverContent align="end" className="w-[min(92vw,20rem)] sm:w-auto">
           <div className="flex flex-col gap-3">
@@ -238,6 +239,7 @@ export function DateRangePicker({
         type="button"
         variant="outline"
         size="icon"
+        className="shrink-0"
         aria-label="Periodo siguiente"
         onClick={() => onValueChange(shiftRange(value, 1))}
       >
