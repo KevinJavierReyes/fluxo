@@ -16,6 +16,13 @@ export class CashflowController {
     @CurrentUser() user: CurrentUserPayload,
     @Query() query: CashflowProjectionQueryDto,
   ) {
-    return this.cashflowService.getProjection(user.id, query);
+    const accountId = query.accountIds?.length
+      ? query.accountIds
+      : query.accountId;
+    return this.cashflowService.getProjection(user.id, {
+      from: query.from,
+      to: query.to,
+      accountId,
+    });
   }
 }

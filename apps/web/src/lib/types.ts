@@ -48,6 +48,12 @@ export interface CashflowDayPoint {
   isNegative: boolean;
 }
 
+export interface CashflowProjection {
+  startingBalance: number;
+  points: CashflowDayPoint[];
+  negativeDays: string[];
+}
+
 export interface DashboardSummary {
   totalBalance: number;
   accounts: { id: string; name: string; balance: number }[];

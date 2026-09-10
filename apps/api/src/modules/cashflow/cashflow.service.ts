@@ -46,6 +46,18 @@ export class CashflowService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Normaliza el filtro de cuenta(s) a una lista, o `undefined` si debe
+   * aplicarse a todas las cuentas no archivadas del usuario.
+   */
+  private resolveAccountIds(
+    accountId?: string | string[],
+  ): string[] | undefined {
+    if (typeof accountId === 'string') return [accountId];
+    if (Array.isArray(accountId) && accountId.length > 0) return accountId;
+    return undefined;
+  }
+
+  /**
    * Las transferencias no son ingreso ni gasto real (se cancelan a nivel
    * patrimonio), así que nunca se mezclan con `income`/`expense` — esos
    * campos siguen siendo "ingreso/gasto real" en todos lados que los
@@ -58,15 +70,16 @@ export class CashflowService {
     userId: string,
     from: Date,
     to: Date,
-    accountId?: string,
+    accountId?: string | string[],
   ): Promise<Map<string, number>> {
+    const ids = this.resolveAccountIds(accountId);
     const [transfersIn, transfersOut] = await Promise.all([
       this.prisma.transfer.groupBy({
         by: ['date'],
         where: {
           userId,
-          ...(accountId
-            ? { toAccountId: accountId }
+          ...(ids
+            ? { toAccountId: { in: ids } }
             : { toAccount: { isArchived: false } }),
           date: { gte: from, lte: to },
         },
@@ -76,8 +89,8 @@ export class CashflowService {
         by: ['date'],
         where: {
           userId,
-          ...(accountId
-            ? { fromAccountId: accountId }
+          ...(ids
+            ? { fromAccountId: { in: ids } }
             : { fromAccount: { isArchived: false } }),
           date: { gte: from, lte: to },
         },
@@ -99,7 +112,11 @@ export class CashflowService {
 
   async getProjection(
     userId: string,
-    { from, to, accountId }: { from: Date; to: Date; accountId?: string },
+    {
+      from,
+      to,
+      accountId,
+    }: { from: Date; to: Date; accountId?: string | string[] },
   ): Promise<CashflowProjection> {
     const startingBalance = await this.getBalanceAt(
       userId,
@@ -108,6 +125,7 @@ export class CashflowService {
       true,
     );
 
+    const ids = this.resolveAccountIds(accountId);
     const dailyTx = await this.prisma.transaction.groupBy({
       by: ['date', 'type'],
       where: {
@@ -116,7 +134,7 @@ export class CashflowService {
         // por cuenta, excluir las archivadas — si no, el saldo inicial (que
         // sí las excluye) y los deltas (que antes las incluían) quedaban
         // calculados con criterios distintos y la proyección no cuadraba.
-        ...(accountId ? { accountId } : { account: { isArchived: false } }),
+        ...(ids ? { accountId: { in: ids } } : { account: { isArchived: false } }),
         date: { gte: from, lte: to },
       },
       _sum: { amount: true },
@@ -273,13 +291,14 @@ export class CashflowService {
   async getBalanceAt(
     userId: string,
     at: Date,
-    accountId?: string,
+    accountId?: string | string[],
     exclusive = false,
   ): Promise<number> {
     // Las cuentas archivadas son borrados suaves: no cuentan para el saldo, ni
     // con su saldo inicial ni con sus movimientos. Así el total, las tarjetas de
     // wallets y la curva de saldo hablan siempre del mismo conjunto de cuentas.
-    const accountFilter = accountId ? { id: accountId } : { isArchived: false };
+    const ids = this.resolveAccountIds(accountId);
+    const accountFilter = ids ? { id: { in: ids } } : { isArchived: false };
 
     const accounts = await this.prisma.account.findMany({
       where: { userId, ...accountFilter },
@@ -296,7 +315,7 @@ export class CashflowService {
         by: ['type'],
         where: {
           userId,
-          ...(accountId ? { accountId } : { account: { isArchived: false } }),
+          ...(ids ? { accountId: { in: ids } } : { account: { isArchived: false } }),
           date: dateFilter,
         },
         _sum: { amount: true },
@@ -304,8 +323,8 @@ export class CashflowService {
       this.prisma.transfer.aggregate({
         where: {
           userId,
-          ...(accountId
-            ? { toAccountId: accountId }
+          ...(ids
+            ? { toAccountId: { in: ids } }
             : { toAccount: { isArchived: false } }),
           date: dateFilter,
         },
@@ -314,8 +333,8 @@ export class CashflowService {
       this.prisma.transfer.aggregate({
         where: {
           userId,
-          ...(accountId
-            ? { fromAccountId: accountId }
+          ...(ids
+            ? { fromAccountId: { in: ids } }
             : { fromAccount: { isArchived: false } }),
           date: dateFilter,
         },

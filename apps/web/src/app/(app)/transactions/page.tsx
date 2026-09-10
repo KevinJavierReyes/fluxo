@@ -3,7 +3,18 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createTransactionSchema, TransactionType, type CreateTransactionInput } from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarIcon, FilterIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
+import {
+  CalendarIcon,
+  FilterIcon,
+  PencilIcon,
+  PlusIcon,
+  SunriseIcon,
+  SunsetIcon,
+  Trash2Icon,
+  TrendingDownIcon,
+  TrendingUpIcon,
+  XIcon,
+} from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { es } from 'react-day-picker/locale';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -16,6 +27,7 @@ import {
   useDeleteTransaction,
   useTransactions,
 } from '@/hooks/use-transactions';
+import { useCashflowProjection } from '@/hooks/use-cashflow-projection';
 import type { ExpenseTemplate, Transaction } from '@/lib/types';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
@@ -45,8 +57,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { filterGroupsByType, findCategoryGroupType } from '@/lib/category-type';
-import { formatLongDate, formatSignedCurrency } from '@/lib/format';
+import { formatCurrency, formatLongDate, formatSignedCurrency } from '@/lib/format';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
 import { CategorySelect } from '@/components/category-select';
 import { MultiSelectPopover } from '@/components/multi-select-popover';
@@ -59,6 +72,81 @@ import {
   utcMidnightToLocalDate,
   type DateRange,
 } from '@/lib/date-range';
+
+/**
+ * Un dato del resumen del día: ícono + monto, ambos coloreados según signo.
+ * El tooltip solo explica qué significa el dato — el valor ya está a la vista.
+ */
+function DayFigure({
+  icon: Icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: typeof TrendingUpIcon;
+  value: string;
+  label: string;
+  tone: 'success' | 'destructive';
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className={`inline-flex cursor-default items-center gap-1 text-xs font-semibold ${
+              tone === 'success' ? 'text-success' : 'text-destructive'
+            }`}
+          />
+        }
+      >
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span>{value}</span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Saldo con el que se empezó y terminó el día, junto al nombre del día. */
+function DayBalance({ balance }: { balance?: { openingBalance: number; closingBalance: number } }) {
+  if (!balance) return null;
+  return (
+    <div className="flex items-center gap-2.5">
+      <DayFigure
+        icon={SunriseIcon}
+        value={formatCurrency(balance.openingBalance)}
+        label="Saldo con el que empezaste el día"
+        tone={balance.openingBalance >= 0 ? 'success' : 'destructive'}
+      />
+      <DayFigure
+        icon={SunsetIcon}
+        value={formatCurrency(balance.closingBalance)}
+        label="Saldo con el que terminaste el día"
+        tone={balance.closingBalance >= 0 ? 'success' : 'destructive'}
+      />
+    </div>
+  );
+}
+
+/** Ingreso/gasto del día. */
+function DayIncomeExpense({ income, expense }: { income: number; expense: number }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <DayFigure
+        icon={TrendingUpIcon}
+        value={formatSignedCurrency(income)}
+        label="Ingresos del día"
+        tone="success"
+      />
+      <DayFigure
+        icon={TrendingDownIcon}
+        value={formatSignedCurrency(-expense)}
+        label="Gastos del día"
+        tone="destructive"
+      />
+    </div>
+  );
+}
 
 export default function TransactionsPage() {
   const { data: accounts } = useAccounts();
@@ -116,6 +204,10 @@ export default function TransactionsPage() {
     categoryIds: filterCategoryIds,
     q: debouncedSearch || undefined,
   });
+  const { data: projection } = useCashflowProjection({
+    range,
+    accountIds: filterAccountIds,
+  });
   const { data: templates } = useExpenseTemplates();
   const createTransaction = useCreateTransaction();
   const deleteTransaction = useDeleteTransaction();
@@ -164,19 +256,37 @@ export default function TransactionsPage() {
   // filas de un mismo día son consecutivas: basta un solo recorrido lineal.
   const dateGroups = useMemo(() => {
     if (!transactions) return [];
-    const result: { date: string; total: number; transactions: Transaction[] }[] = [];
+    const result: { date: string; income: number; expense: number; transactions: Transaction[] }[] = [];
     for (const tx of transactions) {
-      const signedAmount = tx.type === 'INCOME' ? tx.amount : -tx.amount;
       const last = result[result.length - 1];
       if (last && last.date === tx.date) {
-        last.total += signedAmount;
+        if (tx.type === 'INCOME') last.income += tx.amount;
+        else last.expense += tx.amount;
         last.transactions.push(tx);
       } else {
-        result.push({ date: tx.date, total: signedAmount, transactions: [tx] });
+        result.push({
+          date: tx.date,
+          income: tx.type === 'INCOME' ? tx.amount : 0,
+          expense: tx.type === 'EXPENSE' ? tx.amount : 0,
+          transactions: [tx],
+        });
       }
     }
     return result;
   }, [transactions]);
+
+  // El saldo real (a diferencia de income/expense) ignora los filtros de
+  // tipo/categoría/búsqueda — solo respeta el rango y las cuentas filtradas.
+  const balanceByDate = useMemo(() => {
+    const map = new Map<string, { openingBalance: number; closingBalance: number }>();
+    for (const point of projection?.points ?? []) {
+      map.set(point.date.slice(0, 10), {
+        openingBalance: point.openingBalance,
+        closingBalance: point.closingBalance,
+      });
+    }
+    return map;
+  }, [projection]);
 
   const {
     register,
@@ -741,13 +851,14 @@ export default function TransactionsPage() {
                   <Fragment key={group.date}>
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableCell colSpan={4} className="py-2 pl-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {formatLongDate(group.date)}
-                          </span>
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {formatSignedCurrency(group.total)}
-                          </span>
+                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {formatLongDate(group.date)}
+                            </span>
+                            <DayBalance balance={balanceByDate.get(group.date.slice(0, 10))} />
+                          </div>
+                          <DayIncomeExpense income={group.income} expense={group.expense} />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -830,11 +941,12 @@ export default function TransactionsPage() {
           </label>
           {dateGroups.map((group) => (
             <div key={group.date} className="flex flex-col gap-2">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-sm font-medium text-muted-foreground">{formatLongDate(group.date)}</span>
-                <span className="text-sm font-medium text-muted-foreground">
-                  {formatSignedCurrency(group.total)}
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="text-sm font-medium text-muted-foreground">{formatLongDate(group.date)}</span>
+                  <DayBalance balance={balanceByDate.get(group.date.slice(0, 10))} />
+                </div>
+                <DayIncomeExpense income={group.income} expense={group.expense} />
               </div>
               {group.transactions.map((tx) => {
                 const cat = categoryById.get(tx.categoryId);

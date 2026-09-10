@@ -4,6 +4,18 @@ export const cashflowProjectionQuerySchema = z.object({
   from: z.coerce.date(),
   to: z.coerce.date(),
   accountId: z.string().min(1).optional(),
+  /** CSV de ids de cuenta: `?accountIds=a,b,c` (alternativa multi a `accountId`). */
+  accountIds: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value
+        ? value
+            .split(",")
+            .map((id) => id.trim())
+            .filter(Boolean)
+        : undefined,
+    ),
 });
 export type CashflowProjectionQuery = z.infer<typeof cashflowProjectionQuerySchema>;
 
