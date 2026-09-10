@@ -15,7 +15,6 @@ export async function GET() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#00927d',
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
