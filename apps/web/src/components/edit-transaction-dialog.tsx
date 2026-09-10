@@ -26,7 +26,7 @@ function defaultsFor(transaction: Transaction): CreateTransactionInput {
     categoryId: transaction.categoryId,
     type: transaction.type,
     amount: transaction.amount,
-    date: dateToUtcMidnight(new Date(transaction.date)),
+    date: new Date(transaction.date),
     description: transaction.description ?? undefined,
   };
 }
