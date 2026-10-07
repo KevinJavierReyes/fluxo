@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { FREQUENCY_LABELS, WEEKDAY_LABELS } from '@/lib/recurrence';
+import { FREQUENCY_LABELS, WEEKDAY_LABELS, recurrenceLabel } from '@/lib/recurrence';
 import type { RecurringRule } from '@/lib/types';
 
 function toUtcDate(v: string) {
@@ -66,17 +66,7 @@ function AutoConfirmField({
 }
 
 function scheduleSummary(rule: RecurringRule): string {
-  const parts = [
-    rule.interval > 1 ? `${FREQUENCY_LABELS[rule.frequency]} (cada ${rule.interval})` : FREQUENCY_LABELS[rule.frequency],
-  ];
-  if (rule.frequency === RecurrenceFrequency.MONTHLY && rule.byMonthDay) {
-    parts.push(`día ${rule.byMonthDay}`);
-  }
-  if (rule.frequency === RecurrenceFrequency.WEEKLY && rule.byWeekday !== null) {
-    parts.push(WEEKDAY_LABELS[rule.byWeekday]);
-  }
-  parts.push(`desde ${new Date(rule.startDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}`);
-  return parts.join(' · ');
+  return `${recurrenceLabel(rule)} · desde ${new Date(rule.startDate).toLocaleDateString('es-PE', { timeZone: 'UTC' })}`;
 }
 
 /**
