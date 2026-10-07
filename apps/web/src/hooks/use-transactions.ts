@@ -1,7 +1,12 @@
-import type { CreateTransactionInput, TransactionType, UpdateTransactionInput } from '@fluxo/shared';
+import type {
+  CreateTransactionInput,
+  TransactionStatus,
+  TransactionType,
+  UpdateTransactionInput,
+} from '@fluxo/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { queryKeys } from '@/lib/query-keys';
+import { invalidateMoneyQueries, queryKeys } from '@/lib/query-keys';
 import type { Transaction } from '@/lib/types';
 
 interface PaginatedTransactions {
@@ -20,6 +25,8 @@ export function useTransactions(filters?: {
   accountIds?: string[];
   categoryIds?: string[];
   type?: TransactionType;
+  /** Si se omite, la API devuelve CONFIRMED y PENDING (oculta las SKIPPED). */
+  status?: TransactionStatus[];
   q?: string;
   from?: string;
   to?: string;
@@ -32,6 +39,9 @@ export function useTransactions(filters?: {
     params.set('categoryIds', filters.categoryIds.join(','));
   }
   if (filters?.type) params.set('type', filters.type);
+  if (filters?.status && filters.status.length > 0) {
+    params.set('status', filters.status.join(','));
+  }
   if (filters?.q) params.set('q', filters.q);
   if (filters?.from) params.set('from', filters.from);
   if (filters?.to) params.set('to', filters.to);
@@ -54,10 +64,7 @@ export function useCreateTransaction() {
   return useMutation({
     mutationFn: (input: CreateTransactionInput) =>
       apiClient.post<Transaction>('/transactions', input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
-    },
+    onSuccess: () => invalidateMoneyQueries(queryClient),
   });
 }
 
@@ -66,10 +73,7 @@ export function useUpdateTransaction() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateTransactionInput }) =>
       apiClient.patch<Transaction>(`/transactions/${id}`, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
-    },
+    onSuccess: () => invalidateMoneyQueries(queryClient),
   });
 }
 
@@ -77,10 +81,7 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/transactions/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
-    },
+    onSuccess: () => invalidateMoneyQueries(queryClient),
   });
 }
 
@@ -89,9 +90,6 @@ export function useBulkDeleteTransactions() {
   return useMutation({
     mutationFn: (ids: string[]) =>
       apiClient.post<{ deletedCount: number }>('/transactions/bulk-delete', { ids }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
-    },
+    onSuccess: () => invalidateMoneyQueries(queryClient),
   });
 }

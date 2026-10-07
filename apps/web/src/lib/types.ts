@@ -8,6 +8,7 @@ import type {
   CategoryType,
   OverviewGranularity,
   RecurrenceFrequency,
+  TransactionStatus,
   TransactionType,
 } from '@fluxo/shared';
 
@@ -43,13 +44,21 @@ export interface CashflowDayPoint {
   date: string;
   income: number;
   expense: number;
+  /** Saldo proyectado (CONFIRMED + PENDING) al inicio del día. */
   openingBalance: number;
+  /** Saldo proyectado (CONFIRMED + PENDING) al cierre del día. */
   closingBalance: number;
+  /** Saldo real (solo CONFIRMED); null en días futuros. */
+  realOpeningBalance: number | null;
+  realClosingBalance: number | null;
+  /** Hay transacciones PENDING contadas en este día. */
+  hasPending: boolean;
   isNegative: boolean;
 }
 
 export interface CashflowProjection {
   startingBalance: number;
+  realStartingBalance: number;
   points: CashflowDayPoint[];
   negativeDays: string[];
 }
@@ -57,11 +66,7 @@ export interface CashflowProjection {
 export interface DashboardSummary {
   totalBalance: number;
   accounts: { id: string; name: string; balance: number }[];
-  projection: {
-    startingBalance: number;
-    points: CashflowDayPoint[];
-    negativeDays: string[];
-  };
+  projection: CashflowProjection;
   categoryBreakdown: { name: string; amount: number }[];
 }
 
@@ -74,6 +79,9 @@ export interface Transaction {
   date: string;
   description: string | null;
   source: 'MANUAL' | 'RECURRING' | 'TEMPLATE' | 'SAVINGS' | 'MCP';
+  /** PENDING = proyectada (por confirmar), CONFIRMED = ya ocurrió, SKIPPED = saltada. */
+  status: TransactionStatus;
+  recurringRuleId: string | null;
 }
 
 export interface RecurringRule {
@@ -91,6 +99,7 @@ export interface RecurringRule {
   startDate: string;
   endDate: string | null;
   isActive: boolean;
+  autoConfirm: boolean;
   lastGeneratedUntil: string | null;
 }
 
@@ -214,8 +223,13 @@ export interface OverviewWallet {
 
 export interface OverviewBalanceBucket {
   bucket: string;
+  /** Saldo proyectado (CONFIRMED + PENDING). */
   openingBalance: number;
   closingBalance: number;
+  /** Saldo real (solo CONFIRMED); null en buckets futuros. */
+  realOpeningBalance: number | null;
+  realClosingBalance: number | null;
+  hasPending: boolean;
   income: number;
   expense: number;
   isNegative: boolean;
@@ -247,7 +261,9 @@ export interface Overview {
   totalBalance: number;
   wallets: OverviewWallet[];
   totals: {
+    /** Saldo proyectado al final del rango. */
     endingBalance: number;
+    pendingCount: number;
     periodChange: number;
     periodIncome: number;
     periodExpenses: number;
@@ -258,9 +274,5 @@ export interface Overview {
   incomeByGroup: OverviewGroupBreakdown[];
   expenseByGroup: OverviewGroupBreakdown[];
   amountRange: { min: number; max: number };
-  projection: {
-    startingBalance: number;
-    points: CashflowDayPoint[];
-    negativeDays: string[];
-  };
+  projection: CashflowProjection;
 }
