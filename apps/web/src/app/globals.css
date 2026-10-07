@@ -136,6 +136,19 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4 deja los botones con cursor flecha; todo lo clickeable debe
+     mostrar la manita. Va en @layer base para que las utilidades puntuales
+     (disabled:cursor-not-allowed, cursor-grab, cursor-default en menús) ganen. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  [role='checkbox']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true']),
+  [role='combobox']:not([aria-disabled='true']),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
   html {
     @apply font-sans;
     /* Evita que un doble-tap accidental sobre botones/chips dispare el zoom

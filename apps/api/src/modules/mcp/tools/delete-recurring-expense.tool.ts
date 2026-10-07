@@ -17,6 +17,12 @@ const inputSchema = {
     .describe(
       'Tiene que ser exactamente `true` — confirmación explícita de que se quiere borrar',
     ),
+  deleteConfirmed: z
+    .boolean()
+    .optional()
+    .describe(
+      'true = borra también las transacciones ya CONFIRMED generadas por la regla. Por defecto (false) solo se borran las proyectadas (PENDING/SKIPPED) y las confirmadas quedan como movimientos sueltos',
+    ),
 };
 
 export function deleteRecurringExpenseTool(deps: {
@@ -29,7 +35,7 @@ export function deleteRecurringExpenseTool(deps: {
     config: {
       title: 'Eliminar un gasto o ingreso recurrente',
       description:
-        'Borra una regla recurrente por nombre (o id). Requiere confirm:true. No borra las transacciones ya generadas por la regla — solo deja de generar nuevas.',
+        'Borra una regla recurrente por nombre (o id). Requiere confirm:true. Borra también sus transacciones proyectadas (PENDING/SKIPPED); las confirmadas se conservan salvo que se pase deleteConfirmed:true.',
       inputSchema,
       annotations: {
         readOnlyHint: false,
@@ -53,7 +59,9 @@ export function deleteRecurringExpenseTool(deps: {
         args.ruleName as string,
       );
 
-      await deps.recurringRulesService.remove(ctx.userId, rule.id);
+      await deps.recurringRulesService.remove(ctx.userId, rule.id, {
+        deleteConfirmed: args.deleteConfirmed === true,
+      });
 
       return entityResult(
         `Regla recurrente "${rule.name}" borrada.`,

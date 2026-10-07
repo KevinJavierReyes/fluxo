@@ -35,6 +35,12 @@ const inputSchema = {
     .describe(
       'true = las ocurrencias se confirman solas al llegar su fecha; false = quedan PENDING hasta confirmarlas a mano',
     ),
+  applyToConfirmed: z
+    .boolean()
+    .optional()
+    .describe(
+      'true = los cambios de monto/cuenta/categoría/descripción también se aplican a las transacciones ya CONFIRMED de la regla. Por defecto solo se actualizan las proyectadas (PENDING/SKIPPED) no editadas a mano',
+    ),
 };
 
 export function updateRecurringExpenseTool(deps: {
@@ -49,7 +55,7 @@ export function updateRecurringExpenseTool(deps: {
     config: {
       title: 'Editar un gasto o ingreso recurrente',
       description:
-        'Edita nombre, monto, cuenta, categoría, descripción, fecha de fin, estado (activo/pausado) o confirmación automática de una regla recurrente existente. No se puede cambiar la frecuencia, el intervalo, el día del mes/semana ni la fecha de inicio — para eso hay que borrar la regla con delete_recurring_expense y crear una nueva con create_recurring_expense.',
+        'Edita nombre, monto, cuenta, categoría, descripción, fecha de fin, estado (activo/pausado) o confirmación automática de una regla recurrente existente. Los cambios de monto/cuenta/categoría/descripción se propagan a las transacciones proyectadas (PENDING/SKIPPED) de la regla; a las confirmadas solo con applyToConfirmed:true. No se puede cambiar la frecuencia, el intervalo, el día del mes/semana ni la fecha de inicio — para eso hay que borrar la regla con delete_recurring_expense y crear una nueva con create_recurring_expense.',
       inputSchema,
       annotations: {
         readOnlyHint: false,
@@ -108,6 +114,7 @@ export function updateRecurringExpenseTool(deps: {
         endDate: args.endDate,
         isActive: args.isActive,
         autoConfirm: args.autoConfirm,
+        applyToConfirmed: args.applyToConfirmed,
       });
 
       const updated = await deps.recurringRulesService.update(

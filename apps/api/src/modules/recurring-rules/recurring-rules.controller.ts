@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -47,7 +48,13 @@ export class RecurringRulesController {
   }
 
   @Delete(':id')
-  remove(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
-    return this.recurringRulesService.remove(user.id, id);
+  remove(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Query('deleteConfirmed') deleteConfirmed?: string,
+  ) {
+    return this.recurringRulesService.remove(user.id, id, {
+      deleteConfirmed: deleteConfirmed === 'true',
+    });
   }
 }
