@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { ListTransfersQuery } from '@fluxo/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface CreateTransferInput {
@@ -59,6 +60,14 @@ export class TransfersService {
     if (!toAccount) {
       throw new BadRequestException('La cuenta de destino no existe');
     }
+    // Las cuentas archivadas quedan fuera del saldo (CashflowService.getBalanceAt),
+    // así que mover plata hacia/desde ellas descuadraría el patrimonio.
+    if (fromAccount.isArchived) {
+      throw new BadRequestException('La cuenta de origen está archivada');
+    }
+    if (toAccount.isArchived) {
+      throw new BadRequestException('La cuenta de destino está archivada');
+    }
 
     const transfer = await this.prisma.transfer.create({
       data: {
@@ -73,6 +82,35 @@ export class TransfersService {
     });
 
     return { transfer, alreadyExisted: false };
+  }
+
+  async findAll(userId: string, query: ListTransfersQuery) {
+    return this.prisma.transfer.findMany({
+      where: {
+        userId,
+        ...(query.accountId
+          ? {
+              OR: [
+                { fromAccountId: query.accountId },
+                { toAccountId: query.accountId },
+              ],
+            }
+          : {}),
+        ...(query.from || query.to
+          ? {
+              date: {
+                ...(query.from ? { gte: query.from } : {}),
+                ...(query.to ? { lte: query.to } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      include: {
+        fromAccount: { select: { name: true } },
+        toAccount: { select: { name: true } },
+      },
+    });
   }
 
   async findOne(userId: string, id: string) {
