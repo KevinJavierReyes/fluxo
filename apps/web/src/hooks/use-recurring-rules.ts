@@ -40,7 +40,8 @@ export function useUpdateRecurringRule() {
 export function useDeleteRecurringRule() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient.delete(`/recurring-rules/${id}`),
+    mutationFn: ({ id, deleteConfirmed = false }: { id: string; deleteConfirmed?: boolean }) =>
+      apiClient.delete(`/recurring-rules/${id}?deleteConfirmed=${deleteConfirmed}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: key });
       invalidateMoneyQueries(queryClient);

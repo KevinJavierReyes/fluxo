@@ -7,7 +7,7 @@ import { useDeleteRecurringRule, useRecurringRules, useUpdateRecurringRule } fro
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
-import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
+import { DeleteRecurringRuleButton } from '@/components/delete-recurring-rule-button';
 import { RecurringRuleActiveToggle } from '@/components/recurring-rule-active-toggle';
 import { RecurringRuleFormDialog } from '@/components/recurring-rule-form-dialog';
 import { Button } from '@/components/ui/button';
@@ -99,10 +99,8 @@ export default function RecurringRulesPage() {
                       </Button>
                     }
                   />
-                  <ConfirmDeleteButton
-                    aria-label="Eliminar regla"
-                    description="Esta regla recurrente se eliminará de forma permanente. Las transacciones que ya se generaron a partir de ella NO se eliminarán automáticamente: si no las quieres, debes borrarlas manualmente desde el listado de Transacciones (puedes seleccionarlas y eliminarlas en bloque)."
-                    onConfirm={() => deleteRule.mutate(rule.id)}
+                  <DeleteRecurringRuleButton
+                    onConfirm={({ deleteConfirmed }) => deleteRule.mutate({ id: rule.id, deleteConfirmed })}
                   />
                 </div>
               </div>

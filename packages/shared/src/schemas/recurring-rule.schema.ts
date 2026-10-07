@@ -37,6 +37,12 @@ export const updateRecurringRuleSchema = z.object({
   endDate: z.coerce.date().optional(),
   isActive: z.boolean().optional(),
   autoConfirm: z.boolean().optional(),
+  /**
+   * Si es true, los cambios de monto/cuenta/categoría/descripción también se
+   * aplican a las transacciones ya CONFIRMED de la regla. Por defecto solo se
+   * actualizan las proyectadas (PENDING/SKIPPED). No se guarda en la regla.
+   */
+  applyToConfirmed: z.boolean().optional(),
 });
 export type UpdateRecurringRuleInput = z.infer<typeof updateRecurringRuleSchema>;
 

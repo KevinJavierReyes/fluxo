@@ -349,6 +349,7 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
     amount: Number(rule.amount),
     description: rule.description ?? undefined,
     autoConfirm: rule.autoConfirm,
+    applyToConfirmed: false,
   };
 
   const {
@@ -393,8 +394,8 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
 
       <Alert variant="warning">
         <AlertDescription>
-          Editar esta regla no modifica las transacciones que ya se generaron. Los cambios (monto, cuenta, categoría,
-          nombre) solo aplican a las próximas transacciones que se generen hacia adelante.
+          Los cambios de monto, cuenta, categoría y descripción se aplican a las transacciones proyectadas
+          (pendientes u omitidas) y a las que se generen hacia adelante. Las que editaste a mano se respetan.
         </AlertDescription>
       </Alert>
 
@@ -460,6 +461,28 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
         control={control}
         render={({ field }) => (
           <AutoConfirmField id="rule-edit-auto-confirm" checked={!!field.value} onCheckedChange={field.onChange} />
+        )}
+      />
+
+      <Controller
+        name="applyToConfirmed"
+        control={control}
+        render={({ field }) => (
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="rule-edit-apply-confirmed"
+              className="mt-0.5"
+              checked={!!field.value}
+              onCheckedChange={(next) => field.onChange(next === true)}
+            />
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="rule-edit-apply-confirmed">Aplicar también a las transacciones confirmadas</Label>
+              <p className="text-xs text-muted-foreground">
+                Si lo dejas apagado, solo se actualizan las proyectadas. Si lo activas, también cambian las ya
+                confirmadas (y tus saldos reales).
+              </p>
+            </div>
+          </div>
         )}
       />
     </FormDialog>

@@ -103,10 +103,12 @@ export class ObligationsService {
         data: { linkedRecurringRuleId: rule.id },
       });
     } catch (error) {
-      await this.recurringRulesService.remove(userId, rule.id).catch(() => {
-        // Si ni siquiera se puede compensar, no hay más que hacer aquí; el
-        // error original es el que importa reportar.
-      });
+      await this.recurringRulesService
+        .remove(userId, rule.id, { deleteConfirmed: true })
+        .catch(() => {
+          // Si ni siquiera se puede compensar, no hay más que hacer aquí; el
+          // error original es el que importa reportar.
+        });
       throw error;
     }
   }

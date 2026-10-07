@@ -85,9 +85,52 @@ export class RecurringRulesService {
       );
     }
 
-    const result = await this.prisma.recurringRule.updateMany({
-      where: { id, userId },
-      data: dto,
+    // `applyToConfirmed` no es columna de la regla: solo decide el alcance de
+    // la propagación hacia las transacciones.
+    const { applyToConfirmed, ...ruleData } = dto;
+
+    // Campos de la regla que también viven en cada transacción generada.
+    const occurrenceData = {
+      ...(ruleData.amount !== undefined && { amount: ruleData.amount }),
+      ...(ruleData.accountId !== undefined && {
+        accountId: ruleData.accountId,
+      }),
+      ...(ruleData.categoryId !== undefined && {
+        categoryId: ruleData.categoryId,
+      }),
+      ...(ruleData.description !== undefined && {
+        description: ruleData.description,
+      }),
+    };
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedRule = await tx.recurringRule.updateMany({
+        where: { id, userId },
+        data: ruleData,
+      });
+      if (updatedRule.count > 0 && Object.keys(occurrenceData).length > 0) {
+        // Se respetan las ocurrencias editadas a mano (`isModified`). Las
+        // proyectadas (PENDING/SKIPPED) siempre se actualizan; las CONFIRMED
+        // solo si el usuario lo pidió.
+        await tx.transaction.updateMany({
+          where: {
+            recurringRuleId: id,
+            userId,
+            isModified: false,
+            status: {
+              in: applyToConfirmed
+                ? [
+                    TransactionStatus.PENDING,
+                    TransactionStatus.SKIPPED,
+                    TransactionStatus.CONFIRMED,
+                  ]
+                : [TransactionStatus.PENDING, TransactionStatus.SKIPPED],
+            },
+          },
+          data: occurrenceData,
+        });
+      }
+      return updatedRule;
     });
     if (result.count === 0) {
       throw new NotFoundException('Regla recurrente no encontrada');
@@ -103,9 +146,30 @@ export class RecurringRulesService {
     return this.findOne(userId, id);
   }
 
-  async remove(userId: string, id: string) {
+  /**
+   * Borra la regla y sus ocurrencias proyectadas (PENDING/SKIPPED). Las
+   * CONFIRMED se borran solo con `deleteConfirmed`; si no, quedan como
+   * movimientos sueltos (`recurringRuleId` pasa a null por `onDelete: SetNull`).
+   */
+  async remove(
+    userId: string,
+    id: string,
+    options: { deleteConfirmed?: boolean } = {},
+  ) {
     await this.findOne(userId, id);
-    await this.prisma.recurringRule.delete({ where: { id } });
+    const statuses: TransactionStatus[] = [
+      TransactionStatus.PENDING,
+      TransactionStatus.SKIPPED,
+    ];
+    if (options.deleteConfirmed) {
+      statuses.push(TransactionStatus.CONFIRMED);
+    }
+    await this.prisma.$transaction([
+      this.prisma.transaction.deleteMany({
+        where: { recurringRuleId: id, userId, status: { in: statuses } },
+      }),
+      this.prisma.recurringRule.delete({ where: { id } }),
+    ]);
     return deletedResult(id);
   }
 
