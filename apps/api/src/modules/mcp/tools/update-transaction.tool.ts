@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TransactionType } from '@prisma/client';
+import { TransactionStatus, TransactionType } from '@prisma/client';
 import type { TransactionsService } from '../../transactions/transactions.service';
 import { requireResolved } from '../errors/mcp-error';
 import type { McpPolicyService } from '../policy/mcp-policy.service';
@@ -20,6 +20,12 @@ const inputSchema = {
   accountName: z.string().min(1).optional(),
   categoryName: z.string().min(1).optional(),
   description: z.string().max(280).optional(),
+  status: z
+    .nativeEnum(TransactionStatus)
+    .optional()
+    .describe(
+      'CONFIRMED = ya ocurrió (confirmar una proyectada; indica `date` si fue en otro día), SKIPPED = no se hizo este ciclo, PENDING = proyectada/por confirmar',
+    ),
 };
 
 export function updateTransactionTool(deps: {
@@ -34,7 +40,7 @@ export function updateTransactionTool(deps: {
     config: {
       title: 'Editar transacción',
       description:
-        'Edita una transacción existente por su id. Solo hace falta indicar los campos que cambian. Si cambia el tipo o la categoría, se revalida que sigan siendo coherentes entre sí.',
+        'Edita una transacción existente por su id. Solo hace falta indicar los campos que cambian. Si cambia el tipo o la categoría, se revalida que sigan siendo coherentes entre sí. También confirma (status=CONFIRMED, con la fecha real en `date` si fue otro día) o salta (status=SKIPPED) una transacción proyectada PENDING.',
       inputSchema,
       annotations: {
         readOnlyHint: false,
@@ -82,7 +88,9 @@ export function updateTransactionTool(deps: {
           accountId,
           categoryId,
           description: args.description as string | undefined,
+          status: args.status as TransactionStatus | undefined,
         },
+        ctx.timezone,
       );
 
       return entityResult(

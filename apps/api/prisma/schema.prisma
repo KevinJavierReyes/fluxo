@@ -126,6 +126,17 @@ enum TransactionSource {
   MCP
 }
 
+/**
+ * PENDING = proyectada (p. ej. ocurrencia recurrente aún no confirmada): cuenta
+ * en el saldo proyectado pero no en el real. CONFIRMED = ya ocurrió.
+ * SKIPPED = no se hizo: no cuenta en ningún saldo.
+ */
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  SKIPPED
+}
+
 model Transaction {
   id     String @id @default(cuid())
   userId String @db.Uuid
@@ -141,6 +152,7 @@ model Transaction {
   date        DateTime          @db.Date
   description String?
   source      TransactionSource @default(MANUAL)
+  status      TransactionStatus @default(CONFIRMED)
   isModified  Boolean           @default(false)
 
   // Identificador que el cliente (típicamente un agente MCP) genera para
@@ -159,8 +171,8 @@ model Transaction {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, clientRequestId])
-  @@index([userId, date])
-  @@index([accountId, date])
+  @@index([userId, status, date])
+  @@index([accountId, status, date])
   @@index([categoryId])
   @@index([recurringRuleId])
   @@index([expenseTemplateId])
@@ -234,6 +246,8 @@ model RecurringRule {
 
   isActive           Boolean   @default(true)
   lastGeneratedUntil DateTime? @db.Date
+  // Si es true, las ocurrencias pasan solas de PENDING a CONFIRMED al llegar su fecha.
+  autoConfirm        Boolean   @default(false)
 
   occurrences         Transaction[]
   linkedByObligations Obligation[]

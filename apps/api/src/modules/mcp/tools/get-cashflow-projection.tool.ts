@@ -33,7 +33,7 @@ export function getCashflowProjectionTool(deps: {
     config: {
       title: 'Proyectar flujo de caja',
       description:
-        'Proyecta el saldo día a día hacia adelante a partir de los movimientos ya registrados (recurrentes incluidos) y marca los días en que el saldo caería en negativo.',
+        'Proyecta el saldo día a día hacia adelante: closingBalance/openingBalance es el saldo proyectado (CONFIRMED + PENDING; una PENDING vencida se cuenta hoy) y realClosingBalance/realOpeningBalance el saldo real (solo CONFIRMED, null en días futuros). Marca los días en que el saldo proyectado caería en negativo.',
       inputSchema,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -50,16 +50,16 @@ export function getCashflowProjectionTool(deps: {
 
       const today = todayForUser(ctx.timezone);
       const days = (args.days as number) ?? 90;
-      const projection = await deps.cashflowService.getProjection(ctx.userId, {
-        from: today,
-        to: addDays(today, days),
-        accountId,
-      });
+      const projection = await deps.cashflowService.getProjection(
+        ctx.userId,
+        { from: today, to: addDays(today, days), accountId },
+        ctx.timezone,
+      );
 
       const negativePoints = projection.points.filter((p) => p.isNegative);
       const summary =
         negativePoints.length > 0
-          ? `Saldo inicial ${projection.startingBalance.toFixed(2)}. El saldo caería en negativo ${negativePoints.length} día(s):\n` +
+          ? `Saldo inicial real ${projection.realStartingBalance.toFixed(2)} (proyectado ${projection.startingBalance.toFixed(2)}). El saldo proyectado caería en negativo ${negativePoints.length} día(s):\n` +
             negativePoints
               .slice(0, MAX_LISTED_NEGATIVE_DAYS)
               .map(
@@ -70,7 +70,7 @@ export function getCashflowProjectionTool(deps: {
             (negativePoints.length > MAX_LISTED_NEGATIVE_DAYS
               ? `\n... y ${negativePoints.length - MAX_LISTED_NEGATIVE_DAYS} día(s) más en negativo.`
               : '')
-          : `Saldo inicial ${projection.startingBalance.toFixed(2)}. No se proyectan días en negativo en los próximos ${days} días.`;
+          : `Saldo inicial real ${projection.realStartingBalance.toFixed(2)} (proyectado ${projection.startingBalance.toFixed(2)}). No se proyectan días en negativo en los próximos ${days} días.`;
 
       return textResult(
         summary,

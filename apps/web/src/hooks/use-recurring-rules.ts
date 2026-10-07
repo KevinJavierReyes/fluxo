@@ -1,6 +1,7 @@
 import type { CreateRecurringRuleInput, UpdateRecurringRuleInput } from '@fluxo/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { invalidateMoneyQueries } from '@/lib/query-keys';
 import type { RecurringRule } from '@/lib/types';
 
 const key = ['recurring-rules'];
@@ -19,8 +20,7 @@ export function useCreateRecurringRule() {
       apiClient.post<RecurringRule>('/recurring-rules', input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: key });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      invalidateMoneyQueries(queryClient);
     },
   });
 }
@@ -32,8 +32,7 @@ export function useUpdateRecurringRule() {
       apiClient.patch<RecurringRule>(`/recurring-rules/${id}`, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: key });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      invalidateMoneyQueries(queryClient);
     },
   });
 }
@@ -44,8 +43,7 @@ export function useDeleteRecurringRule() {
     mutationFn: (id: string) => apiClient.delete(`/recurring-rules/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: key });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      invalidateMoneyQueries(queryClient);
     },
   });
 }

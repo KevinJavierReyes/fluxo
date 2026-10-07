@@ -21,6 +21,7 @@ import { CategorySelect } from '@/components/category-select';
 import { TransactionTypeSelect } from '@/components/transaction-type-select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -34,6 +35,34 @@ function toUtcDate(v: string) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{children}</p>;
+}
+
+function AutoConfirmField({
+  id,
+  checked,
+  onCheckedChange,
+}: {
+  id: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start gap-2">
+      <Checkbox
+        id={id}
+        className="mt-0.5"
+        checked={checked}
+        onCheckedChange={(next) => onCheckedChange(next === true)}
+      />
+      <div className="flex flex-col gap-0.5">
+        <Label htmlFor={id}>Confirmar automáticamente</Label>
+        <p className="text-xs text-muted-foreground">
+          Cada ocurrencia pasa sola a confirmada al llegar su fecha (útil para sueldo o suscripciones). Si lo dejas
+          apagado, quedan pendientes hasta que las confirmes.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function scheduleSummary(rule: RecurringRule): string {
@@ -84,6 +113,7 @@ function CreateRecurringRuleDialog({ trigger }: { trigger?: ReactElement }) {
     accountId: '',
     categoryId: '',
     name: '',
+    autoConfirm: false,
   };
 
   const {
@@ -293,6 +323,14 @@ function CreateRecurringRuleDialog({ trigger }: { trigger?: ReactElement }) {
         <Label htmlFor="rule-description">Descripción</Label>
         <Input id="rule-description" {...register('description')} />
       </div>
+
+      <Controller
+        name="autoConfirm"
+        control={control}
+        render={({ field }) => (
+          <AutoConfirmField id="rule-auto-confirm" checked={!!field.value} onCheckedChange={field.onChange} />
+        )}
+      />
     </FormDialog>
   );
 }
@@ -310,6 +348,7 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
     categoryId: rule.categoryId,
     amount: Number(rule.amount),
     description: rule.description ?? undefined,
+    autoConfirm: rule.autoConfirm,
   };
 
   const {
@@ -415,6 +454,14 @@ function EditRecurringRuleDialog({ rule, trigger }: { rule: RecurringRule; trigg
         <Label htmlFor="rule-edit-description">Descripción</Label>
         <Input id="rule-edit-description" {...register('description')} />
       </div>
+
+      <Controller
+        name="autoConfirm"
+        control={control}
+        render={({ field }) => (
+          <AutoConfirmField id="rule-edit-auto-confirm" checked={!!field.value} onCheckedChange={field.onChange} />
+        )}
+      />
     </FormDialog>
   );
 }

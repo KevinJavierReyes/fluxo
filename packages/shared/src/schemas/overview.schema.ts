@@ -43,8 +43,15 @@ export type OverviewWallet = z.infer<typeof overviewWalletSchema>;
 
 export const overviewBalanceBucketSchema = z.object({
   bucket: z.coerce.date(),
+  /** Saldo proyectado (CONFIRMED + PENDING) al inicio del bucket. */
   openingBalance: z.number(),
+  /** Saldo proyectado (CONFIRMED + PENDING) al cierre del bucket. */
   closingBalance: z.number(),
+  /** Saldo real (solo CONFIRMED) al inicio del bucket; null si el bucket es futuro. */
+  realOpeningBalance: z.number().nullable(),
+  /** Saldo real (solo CONFIRMED) al cierre del bucket; null si el bucket es futuro. */
+  realClosingBalance: z.number().nullable(),
+  hasPending: z.boolean(),
   income: z.number(),
   expense: z.number(),
   isNegative: z.boolean(),
@@ -83,7 +90,10 @@ export const overviewResponseSchema = z.object({
   totalBalance: z.number(),
   wallets: z.array(overviewWalletSchema),
   totals: z.object({
+    /** Saldo proyectado (CONFIRMED + PENDING) al final del rango. */
     endingBalance: z.number(),
+    /** Transacciones PENDING dentro del rango (sin filtros de categoría/monto). */
+    pendingCount: z.number(),
     periodChange: z.number(),
     periodIncome: z.number(),
     periodExpenses: z.number(),

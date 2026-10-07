@@ -22,7 +22,7 @@ export class SavingsGoalsService {
 
   private async withProgress(goal: SavingsGoal) {
     const agg = await this.prisma.transaction.aggregate({
-      where: { savingsGoalId: goal.id },
+      where: { savingsGoalId: goal.id, status: 'CONFIRMED' },
       _sum: { amount: true },
     });
     return { ...goal, progress: Number(agg._sum.amount ?? 0) };

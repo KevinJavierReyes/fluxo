@@ -29,6 +29,12 @@ const inputSchema = {
     .boolean()
     .optional()
     .describe('false para pausar la regla sin borrarla, true para reactivarla'),
+  autoConfirm: z
+    .boolean()
+    .optional()
+    .describe(
+      'true = las ocurrencias se confirman solas al llegar su fecha; false = quedan PENDING hasta confirmarlas a mano',
+    ),
 };
 
 export function updateRecurringExpenseTool(deps: {
@@ -43,7 +49,7 @@ export function updateRecurringExpenseTool(deps: {
     config: {
       title: 'Editar un gasto o ingreso recurrente',
       description:
-        'Edita nombre, monto, cuenta, categoría, descripción, fecha de fin o estado (activo/pausado) de una regla recurrente existente. No se puede cambiar la frecuencia, el intervalo, el día del mes/semana ni la fecha de inicio — para eso hay que borrar la regla con delete_recurring_expense y crear una nueva con create_recurring_expense.',
+        'Edita nombre, monto, cuenta, categoría, descripción, fecha de fin, estado (activo/pausado) o confirmación automática de una regla recurrente existente. No se puede cambiar la frecuencia, el intervalo, el día del mes/semana ni la fecha de inicio — para eso hay que borrar la regla con delete_recurring_expense y crear una nueva con create_recurring_expense.',
       inputSchema,
       annotations: {
         readOnlyHint: false,
@@ -101,6 +107,7 @@ export function updateRecurringExpenseTool(deps: {
         description: args.description as string | undefined,
         endDate: args.endDate,
         isActive: args.isActive,
+        autoConfirm: args.autoConfirm,
       });
 
       const updated = await deps.recurringRulesService.update(

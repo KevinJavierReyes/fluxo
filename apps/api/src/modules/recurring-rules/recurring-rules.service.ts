@@ -4,8 +4,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { RecurringRule } from '@prisma/client';
-import { addDays, todayUtc } from '../../common/date.util';
+import { RecurringRule, TransactionStatus } from '@prisma/client';
+import { addDays, todayForUser, todayUtc } from '../../common/date.util';
 import { deletedResult } from '../../common/delete-result';
 import { CategoriesService } from '../categories/categories.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -97,6 +97,9 @@ export class RecurringRulesService {
     if (dto.isActive === true && !existing.isActive) {
       await this.generateOccurrencesFor(updated);
     }
+    if (dto.autoConfirm === true && !existing.autoConfirm) {
+      await this.confirmDueOccurrences(updated);
+    }
     return this.findOne(userId, id);
   }
 
@@ -104,6 +107,34 @@ export class RecurringRulesService {
     await this.findOne(userId, id);
     await this.prisma.recurringRule.delete({ where: { id } });
     return deletedResult(id);
+  }
+
+  private async getOwnerToday(userId: string): Promise<Date> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    return todayForUser(user?.timezone ?? 'UTC');
+  }
+
+  /**
+   * Para reglas con `autoConfirm`: pasa a CONFIRMED las ocurrencias PENDING
+   * cuya fecha ya llegó (según la zona horaria del dueño). Devuelve cuántas.
+   */
+  async confirmDueOccurrences(rule: RecurringRule): Promise<number> {
+    if (!rule.autoConfirm || !rule.isActive) {
+      return 0;
+    }
+    const today = await this.getOwnerToday(rule.userId);
+    const result = await this.prisma.transaction.updateMany({
+      where: {
+        recurringRuleId: rule.id,
+        status: TransactionStatus.PENDING,
+        date: { lte: today },
+      },
+      data: { status: TransactionStatus.CONFIRMED },
+    });
+    return result.count;
   }
 
   /** Materializa las ocurrencias faltantes de una regla hasta el horizonte rodante. */
@@ -126,6 +157,10 @@ export class RecurringRulesService {
     const dates = generateOccurrenceDates(rule, from, horizon);
 
     if (dates.length > 0) {
+      // Las ocurrencias futuras nacen PENDING (proyectadas) hasta que se
+      // confirmen; las que ya llegaron (regla creada con fecha de inicio
+      // pasada) se registran directamente como CONFIRMED.
+      const today = await this.getOwnerToday(rule.userId);
       await this.prisma.transaction.createMany({
         data: dates.map((date) => ({
           userId: rule.userId,
@@ -136,6 +171,10 @@ export class RecurringRulesService {
           date,
           description: rule.description,
           source: 'RECURRING' as const,
+          status:
+            date.getTime() > today.getTime()
+              ? TransactionStatus.PENDING
+              : TransactionStatus.CONFIRMED,
           recurringRuleId: rule.id,
         })),
       });
