@@ -100,6 +100,7 @@ export class BudgetsService {
           where: {
             userId,
             type: 'EXPENSE',
+            status: 'CONFIRMED',
             date: { gte: start, lte: end },
             category: { groupId: budget.categoryGroupId },
           },

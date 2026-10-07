@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionType } from '@prisma/client';
+import { TransactionStatus, TransactionType } from '@prisma/client';
 import {
   bucketStart,
   eachBucket,
@@ -10,27 +10,65 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 export interface CashflowDayPoint {
   date: Date;
+  /** Ingreso proyectado (CONFIRMED + PENDING) del día. */
   income: number;
+  /** Gasto proyectado (CONFIRMED + PENDING) del día. */
   expense: number;
+  /** Saldo proyectado al inicio del día. */
   openingBalance: number;
+  /** Saldo proyectado al cierre del día. */
   closingBalance: number;
+  /** Saldo real (solo CONFIRMED) al inicio del día; null si el día es futuro. */
+  realOpeningBalance: number | null;
+  /** Saldo real (solo CONFIRMED) al cierre del día; null si el día es futuro. */
+  realClosingBalance: number | null;
+  /** Hay PENDING contadas en este día. */
+  hasPending: boolean;
   isNegative: boolean;
 }
 
 export interface CashflowProjection {
+  /** Saldo proyectado al inicio del rango. */
   startingBalance: number;
+  /** Saldo real al inicio del rango. */
+  realStartingBalance: number;
   points: CashflowDayPoint[];
   negativeDays: Date[];
 }
 
 export interface CashflowBalanceBucket {
   bucket: Date;
+  /** Saldo proyectado al inicio del bucket. */
   openingBalance: number;
+  /** Saldo proyectado al cierre del bucket. */
   closingBalance: number;
+  /** Saldo real al inicio del bucket; null si el bucket es futuro. */
+  realOpeningBalance: number | null;
+  /** Saldo real al cierre del bucket; null si el bucket es futuro. */
+  realClosingBalance: number | null;
+  hasPending: boolean;
   income: number;
   expense: number;
   isNegative: boolean;
   isFuture: boolean;
+}
+
+interface DailyDelta {
+  income: number;
+  expense: number;
+  realIncome: number;
+  realExpense: number;
+  hasPending: boolean;
+}
+
+function emptyDelta(): DailyDelta {
+  return {
+    income: 0,
+    expense: 0,
+    realIncome: 0,
+    realExpense: 0,
+    hasPending: false,
+  };
 }
 
 function toDateKey(date: Date): string {
@@ -110,6 +148,89 @@ export class CashflowService {
     return deltas;
   }
 
+  /**
+   * Deltas diarios de ingreso/gasto en `[from, to]`, separando el efecto real
+   * del proyectado:
+   * - CONFIRMED cuenta en el proyectado el día de su fecha, y en el real solo
+   *   si esa fecha ya llegó (`<= today`).
+   * - PENDING cuenta solo en el proyectado; si ya venció (`date < today`) se
+   *   cuenta en `today` (la hipótesis es que se pagará hoy).
+   * - SKIPPED no cuenta en ningún lado.
+   * Las claves del mapa son la fecha efectiva (YYYY-MM-DD).
+   */
+  private async getDailyDeltas(
+    userId: string,
+    from: Date,
+    to: Date,
+    accountId: string | string[] | undefined,
+    today: Date,
+  ): Promise<Map<string, DailyDelta>> {
+    const ids = this.resolveAccountIds(accountId);
+    const rows = await this.prisma.transaction.groupBy({
+      by: ['date', 'type', 'status'],
+      where: {
+        userId,
+        // Mismo criterio que getBalanceAt: si no se filtra por cuenta, excluir
+        // las archivadas — si no, el saldo inicial (que sí las excluye) y los
+        // deltas quedaban calculados con criterios distintos.
+        ...(ids
+          ? { accountId: { in: ids } }
+          : { account: { isArchived: false } }),
+        // Las PENDING vencidas pueden tener fecha anterior a `from` pero caer
+        // dentro del rango como "hoy": por eso su cota inferior se resuelve
+        // abajo, en memoria, y acá solo se acota por `to`.
+        OR: [
+          {
+            status: TransactionStatus.CONFIRMED,
+            date: { gte: from, lte: to },
+          },
+          { status: TransactionStatus.PENDING, date: { lte: to } },
+        ],
+      },
+      _sum: { amount: true },
+    });
+
+    const fromKey = toDateKey(from);
+    const toKey = toDateKey(to);
+    const todayKey = toDateKey(today);
+    const byKey = new Map<string, DailyDelta>();
+
+    for (const row of rows) {
+      if (row.status === TransactionStatus.SKIPPED) continue;
+      const dateKey = toDateKey(row.date);
+      const amount = Number(row._sum.amount ?? 0);
+      const isIncome = row.type === TransactionType.INCOME;
+      const isPending = row.status === TransactionStatus.PENDING;
+
+      const key = isPending && dateKey < todayKey ? todayKey : dateKey;
+      if (key < fromKey || key > toKey) continue;
+
+      const entry = byKey.get(key) ?? emptyDelta();
+      if (isIncome) entry.income += amount;
+      else entry.expense += amount;
+      if (isPending) {
+        entry.hasPending = true;
+      } else if (dateKey <= todayKey) {
+        if (isIncome) entry.realIncome += amount;
+        else entry.realExpense += amount;
+      }
+      byKey.set(key, entry);
+    }
+    return byKey;
+  }
+
+  /** Saldo real de arranque de un rango que empieza en `from` (nunca futuro). */
+  private getRealStartingBalance(
+    userId: string,
+    from: Date,
+    today: Date,
+    accountId?: string | string[],
+  ): Promise<number> {
+    return from.getTime() <= today.getTime()
+      ? this.getBalanceAt(userId, from, accountId, true)
+      : this.getBalanceAt(userId, today, accountId, false);
+  }
+
   async getProjection(
     userId: string,
     {
@@ -117,77 +238,62 @@ export class CashflowService {
       to,
       accountId,
     }: { from: Date; to: Date; accountId?: string | string[] },
+    timezone: string,
   ): Promise<CashflowProjection> {
-    const startingBalance = await this.getBalanceAt(
-      userId,
-      from,
-      accountId,
-      true,
-    );
+    const today = todayForUser(timezone);
+    const todayKey = toDateKey(today);
 
-    const ids = this.resolveAccountIds(accountId);
-    const dailyTx = await this.prisma.transaction.groupBy({
-      by: ['date', 'type'],
-      where: {
-        userId,
-        // Mismo criterio que getBalanceAt/getBalanceSeries: si no se filtra
-        // por cuenta, excluir las archivadas — si no, el saldo inicial (que
-        // sí las excluye) y los deltas (que antes las incluían) quedaban
-        // calculados con criterios distintos y la proyección no cuadraba.
-        ...(ids ? { accountId: { in: ids } } : { account: { isArchived: false } }),
-        date: { gte: from, lte: to },
-      },
-      _sum: { amount: true },
-    });
-
-    const byDate = new Map<string, { income: number; expense: number }>();
-    for (const row of dailyTx) {
-      const key = toDateKey(row.date);
-      const entry = byDate.get(key) ?? { income: 0, expense: 0 };
-      const amount = Number(row._sum.amount ?? 0);
-      if (row.type === TransactionType.INCOME) {
-        entry.income += amount;
-      } else {
-        entry.expense += amount;
-      }
-      byDate.set(key, entry);
-    }
-
-    const transferDeltas = await this.getTransferNetDeltasByDate(
-      userId,
-      from,
-      to,
-      accountId,
-    );
+    const [startingBalance, realStartingBalance, dailyDeltas, transferDeltas] =
+      await Promise.all([
+        this.getBalanceAt(userId, from, accountId, true, today),
+        this.getRealStartingBalance(userId, from, today, accountId),
+        this.getDailyDeltas(userId, from, to, accountId, today),
+        this.getTransferNetDeltasByDate(userId, from, to, accountId),
+      ]);
 
     const sortedKeys = Array.from(
-      new Set([...byDate.keys(), ...transferDeltas.keys()]),
+      new Set([...dailyDeltas.keys(), ...transferDeltas.keys()]),
     ).sort();
     let running = startingBalance;
+    let realRunning = realStartingBalance;
     const points: CashflowDayPoint[] = [];
     const negativeDays: Date[] = [];
 
     for (const key of sortedKeys) {
-      const { income, expense } = byDate.get(key) ?? { income: 0, expense: 0 };
+      const delta = dailyDeltas.get(key) ?? emptyDelta();
       const transferNet = transferDeltas.get(key) ?? 0;
       const openingBalance = running;
-      const closingBalance = openingBalance + income - expense + transferNet;
+      const closingBalance =
+        openingBalance + delta.income - delta.expense + transferNet;
       running = closingBalance;
+
+      let realOpeningBalance: number | null = null;
+      let realClosingBalance: number | null = null;
+      if (key <= todayKey) {
+        realOpeningBalance = realRunning;
+        realClosingBalance =
+          realRunning + delta.realIncome - delta.realExpense + transferNet;
+        realRunning = realClosingBalance;
+      }
+
       const isNegative = closingBalance < 0;
       if (isNegative) {
         negativeDays.push(fromDateKey(key));
       }
       points.push({
         date: fromDateKey(key),
-        income,
-        expense,
+        income: delta.income,
+        expense: delta.expense,
         openingBalance,
         closingBalance,
+        realOpeningBalance,
+        realClosingBalance,
+        hasPending: delta.hasPending,
         isNegative,
       });
     }
 
-    return { startingBalance, points, negativeDays };
+    return { startingBalance, realStartingBalance, points, negativeDays };
   }
 
   /**
@@ -214,72 +320,80 @@ export class CashflowService {
     }
 
     const seriesStart = buckets[0];
-    const openingBalance = await this.getBalanceAt(
-      userId,
-      seriesStart,
-      accountId,
-      true,
-    );
+    const today = todayForUser(timezone);
+    const todayKey = toDateKey(today);
+    const todayBucket = bucketStart(today, granularity).getTime();
 
-    const dailyTx = await this.prisma.transaction.groupBy({
-      by: ['date', 'type'],
-      where: {
-        userId,
-        ...(accountId ? { accountId } : { account: { isArchived: false } }),
-        date: { gte: seriesStart, lte: to },
-      },
-      _sum: { amount: true },
-    });
+    const [openingBalance, realOpeningBalance, dailyDeltas, transferDeltas] =
+      await Promise.all([
+        this.getBalanceAt(userId, seriesStart, accountId, true, today),
+        this.getRealStartingBalance(userId, seriesStart, today, accountId),
+        this.getDailyDeltas(userId, seriesStart, to, accountId, today),
+        this.getTransferNetDeltasByDate(userId, seriesStart, to, accountId),
+      ]);
 
-    const byBucket = new Map<string, { income: number; expense: number }>();
-    for (const row of dailyTx) {
-      const key = toDateKey(bucketStart(row.date, granularity));
-      const entry = byBucket.get(key) ?? { income: 0, expense: 0 };
-      const amount = Number(row._sum.amount ?? 0);
-      if (row.type === TransactionType.INCOME) {
-        entry.income += amount;
-      } else {
-        entry.expense += amount;
-      }
+    const byBucket = new Map<string, DailyDelta>();
+    for (const [dateKey, delta] of dailyDeltas) {
+      const key = toDateKey(bucketStart(fromDateKey(dateKey), granularity));
+      const entry = byBucket.get(key) ?? emptyDelta();
+      entry.income += delta.income;
+      entry.expense += delta.expense;
+      entry.realIncome += delta.realIncome;
+      entry.realExpense += delta.realExpense;
+      entry.hasPending = entry.hasPending || delta.hasPending;
       byBucket.set(key, entry);
     }
 
-    const transferDeltasByDate = await this.getTransferNetDeltasByDate(
-      userId,
-      seriesStart,
-      to,
-      accountId,
-    );
-    const transferDeltasByBucket = new Map<string, number>();
-    for (const [dateKey, delta] of transferDeltasByDate) {
+    const transferByBucket = new Map<string, number>();
+    const realTransferByBucket = new Map<string, number>();
+    for (const [dateKey, delta] of transferDeltas) {
       const key = toDateKey(bucketStart(fromDateKey(dateKey), granularity));
-      transferDeltasByBucket.set(
-        key,
-        (transferDeltasByBucket.get(key) ?? 0) + delta,
-      );
+      transferByBucket.set(key, (transferByBucket.get(key) ?? 0) + delta);
+      if (dateKey <= todayKey) {
+        realTransferByBucket.set(
+          key,
+          (realTransferByBucket.get(key) ?? 0) + delta,
+        );
+      }
     }
 
-    const today = todayForUser(timezone);
-    const todayBucket = bucketStart(today, granularity).getTime();
-
     let running = openingBalance;
+    let realRunning = realOpeningBalance;
     return buckets.map((bucket) => {
-      const { income, expense } = byBucket.get(toDateKey(bucket)) ?? {
-        income: 0,
-        expense: 0,
-      };
-      const transferNet = transferDeltasByBucket.get(toDateKey(bucket)) ?? 0;
+      const key = toDateKey(bucket);
+      const delta = byBucket.get(key) ?? emptyDelta();
       const bucketOpening = running;
-      const closingBalance = bucketOpening + income - expense + transferNet;
+      const closingBalance =
+        bucketOpening +
+        delta.income -
+        delta.expense +
+        (transferByBucket.get(key) ?? 0);
       running = closingBalance;
+
+      const isFuture = bucket.getTime() > todayBucket;
+      let bucketRealOpening: number | null = null;
+      let bucketRealClosing: number | null = null;
+      if (!isFuture) {
+        bucketRealOpening = realRunning;
+        bucketRealClosing =
+          realRunning +
+          delta.realIncome -
+          delta.realExpense +
+          (realTransferByBucket.get(key) ?? 0);
+        realRunning = bucketRealClosing;
+      }
+
       return {
         bucket,
         openingBalance: bucketOpening,
         closingBalance,
-        income,
-        expense,
+        realOpeningBalance: bucketRealOpening,
+        realClosingBalance: bucketRealClosing,
+        hasPending: delta.hasPending,
+        income: delta.income,
+        expense: delta.expense,
         isNegative: closingBalance < 0,
-        isFuture: bucket.getTime() > todayBucket,
+        isFuture,
       };
     });
   }
@@ -287,12 +401,18 @@ export class CashflowService {
   /**
    * Saldo acumulado de una cuenta (o de todas) hasta una fecha.
    * `exclusive` = true excluye la fecha exacta (para calcular el saldo de apertura de un rango).
+   *
+   * Por defecto es el saldo **real**: solo transacciones CONFIRMED. Si se pasa
+   * `projectedToday` (la fecha "hoy" del usuario) devuelve el saldo
+   * **proyectado**: suma además las PENDING, pero solo cuando `at` es posterior
+   * a hoy — una PENDING vencida se considera pagada hoy, no en su fecha vieja.
    */
   async getBalanceAt(
     userId: string,
     at: Date,
     accountId?: string | string[],
     exclusive = false,
+    projectedToday?: Date,
   ): Promise<number> {
     // Las cuentas archivadas son borrados suaves: no cuentan para el saldo, ni
     // con su saldo inicial ni con sus movimientos. Así el total, las tarjetas de
@@ -310,12 +430,24 @@ export class CashflowService {
 
     const dateFilter = exclusive ? { lt: at } : { lte: at };
 
+    const includePending =
+      projectedToday !== undefined &&
+      (exclusive
+        ? projectedToday.getTime() < at.getTime()
+        : projectedToday.getTime() <= at.getTime());
+    const statusFilter = includePending
+      ? { in: [TransactionStatus.CONFIRMED, TransactionStatus.PENDING] }
+      : TransactionStatus.CONFIRMED;
+
     const [agg, transfersIn, transfersOut] = await Promise.all([
       this.prisma.transaction.groupBy({
         by: ['type'],
         where: {
           userId,
-          ...(ids ? { accountId: { in: ids } } : { account: { isArchived: false } }),
+          ...(ids
+            ? { accountId: { in: ids } }
+            : { account: { isArchived: false } }),
+          status: statusFilter,
           date: dateFilter,
         },
         _sum: { amount: true },

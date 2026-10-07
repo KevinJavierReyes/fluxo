@@ -19,10 +19,10 @@ export class CashflowController {
     const accountId = query.accountIds?.length
       ? query.accountIds
       : query.accountId;
-    return this.cashflowService.getProjection(user.id, {
-      from: query.from,
-      to: query.to,
-      accountId,
-    });
+    return this.cashflowService.getProjection(
+      user.id,
+      { from: query.from, to: query.to, accountId },
+      user.timezone,
+    );
   }
 }

@@ -1,5 +1,5 @@
 import { getUpcomingBillsTool } from './get-upcoming-bills.tool';
-import type { RecurringRulesService } from '../../recurring-rules/recurring-rules.service';
+import type { TransactionsService } from '../../transactions/transactions.service';
 
 function daysFromNowUtc(days: number): Date {
   const d = new Date();
@@ -8,67 +8,81 @@ function daysFromNowUtc(days: number): Date {
   );
 }
 
+function pendingTx(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'tx-1',
+    date: daysFromNowUtc(3),
+    amount: 10,
+    type: 'EXPENSE',
+    description: null,
+    recurringRuleId: 'r1',
+    recurringRule: { name: 'Suscripción' },
+    account: { name: 'Principal' },
+    category: { name: 'Streaming' },
+    ...overrides,
+  };
+}
+
 describe('getUpcomingBillsTool', () => {
   const ctx = { userId: 'user-1', timezone: 'UTC' };
 
-  it('incluye una regla DIARIA activa dentro del horizonte, ordenada por fecha', async () => {
-    const activeRule = {
-      id: 'r1',
-      name: 'Suscripción',
-      amount: 10,
-      type: 'EXPENSE',
-      frequency: 'DAILY',
-      interval: 1,
-      byMonthDay: null,
-      byWeekday: null,
-      startDate: daysFromNowUtc(-30),
-      endDate: null,
-      isActive: true,
-      account: { name: 'Principal' },
-      category: { name: 'Streaming' },
-    };
-    const recurringRulesService = {
-      findAll: jest.fn().mockResolvedValue([activeRule]),
+  it('lista las PENDING con su id, ordenadas por fecha, y marca las vencidas', async () => {
+    const transactionsService = {
+      findAll: jest.fn().mockResolvedValue({
+        items: [
+          pendingTx({ id: 'tx-late', date: daysFromNowUtc(5) }),
+          pendingTx({
+            id: 'tx-overdue',
+            date: daysFromNowUtc(-2),
+            description: null,
+          }),
+        ],
+        nextCursor: null,
+        hasMore: false,
+      }),
     };
     const tool = getUpcomingBillsTool({
-      recurringRulesService:
-        recurringRulesService as unknown as RecurringRulesService,
+      transactionsService:
+        transactionsService as unknown as TransactionsService,
     });
 
     const result = await tool.handler({ days: 7 }, ctx);
 
-    expect(result.content[0].text).toContain('Suscripción');
-    expect(result.content[0].text).toContain('Streaming');
-    const bills = result.structuredContent!.bills as { date: Date }[];
-    expect(bills.length).toBeGreaterThanOrEqual(7);
+    const text = result.content[0].text;
+    expect(text).toContain('Suscripción');
+    expect(text).toContain('id=tx-late');
+    expect(text).toContain('id=tx-overdue');
+    expect(text).toContain('[VENCIDA]');
+    const bills = result.structuredContent!.bills as {
+      id: string;
+      overdue: boolean;
+    }[];
+    expect(bills.map((b) => b.id)).toEqual(['tx-overdue', 'tx-late']);
+    expect(bills[0].overdue).toBe(true);
+    expect(bills[1].overdue).toBe(false);
   });
 
-  it('ignora reglas pausadas (isActive:false)', async () => {
-    const pausedRule = {
-      id: 'r2',
-      name: 'Pausada',
-      amount: 10,
-      type: 'EXPENSE',
-      frequency: 'DAILY',
-      interval: 1,
-      byMonthDay: null,
-      byWeekday: null,
-      startDate: daysFromNowUtc(-30),
-      endDate: null,
-      isActive: false,
-      account: { name: 'Principal' },
-      category: { name: 'Otros' },
-    };
-    const recurringRulesService = {
-      findAll: jest.fn().mockResolvedValue([pausedRule]),
+  it('pide solo transacciones PENDING hasta el horizonte', async () => {
+    const transactionsService = {
+      findAll: jest
+        .fn()
+        .mockResolvedValue({ items: [], nextCursor: null, hasMore: false }),
     };
     const tool = getUpcomingBillsTool({
-      recurringRulesService:
-        recurringRulesService as unknown as RecurringRulesService,
+      transactionsService:
+        transactionsService as unknown as TransactionsService,
     });
 
     const result = await tool.handler({ days: 7 }, ctx);
 
+    const calls = transactionsService.findAll.mock.calls as [
+      string,
+      { status: string[]; to: Date; from?: Date },
+    ][];
+    const query = calls[0][1];
+    expect(query.status).toEqual(['PENDING']);
+    expect(query.to.getTime()).toBe(daysFromNowUtc(7).getTime());
+    expect(query.from).toBeUndefined();
     expect(result.content[0].text).toContain('No hay vencimientos proyectados');
   });
 });

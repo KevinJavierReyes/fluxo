@@ -89,6 +89,7 @@ export class ObligationsService {
       interval: 1,
       byMonthDay: dto.byMonthDay,
       startDate: dto.startDate,
+      autoConfirm: false,
     });
 
     // recurringRulesService.create ya hizo sus propias escrituras (regla +

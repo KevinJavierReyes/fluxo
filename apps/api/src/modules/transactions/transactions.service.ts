@@ -3,7 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, TransactionSource, TransactionType } from '@prisma/client';
+import {
+  Prisma,
+  TransactionSource,
+  TransactionStatus,
+  TransactionType,
+} from '@prisma/client';
+import { todayForUser } from '../../common/date.util';
 import { CategoriesService } from '../categories/categories.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -33,6 +39,13 @@ export class TransactionsService {
           ? { categoryId: query.categoryId }
           : {}),
       ...(query.type ? { type: query.type } : {}),
+      // Sin filtro explícito se ocultan las SKIPPED (saltadas).
+      status: {
+        in: query.status ?? [
+          TransactionStatus.CONFIRMED,
+          TransactionStatus.PENDING,
+        ],
+      },
       ...(query.from || query.to
         ? {
             date: {
@@ -60,6 +73,7 @@ export class TransactionsService {
       include: {
         account: { select: { name: true } },
         category: { select: { name: true } },
+        recurringRule: { select: { name: true } },
       },
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
@@ -137,9 +151,50 @@ export class TransactionsService {
     return { transaction, alreadyExisted: false };
   }
 
-  async update(userId: string, id: string, dto: UpdateTransactionDto) {
+  /**
+   * Cambiar solo el `status` (confirmar/saltar) no cuenta como edición: la
+   * transacción se marca `isModified` únicamente si cambió algún dato real.
+   */
+  private hasContentChanges(
+    existing: Prisma.TransactionGetPayload<object>,
+    dto: UpdateTransactionDto,
+  ): boolean {
+    return (
+      (dto.amount !== undefined &&
+        Number(dto.amount) !== Number(existing.amount)) ||
+      (dto.date !== undefined &&
+        dto.date.getTime() !== existing.date.getTime()) ||
+      (dto.accountId !== undefined && dto.accountId !== existing.accountId) ||
+      (dto.categoryId !== undefined &&
+        dto.categoryId !== existing.categoryId) ||
+      (dto.type !== undefined && dto.type !== existing.type) ||
+      (dto.description !== undefined &&
+        dto.description !== (existing.description ?? undefined))
+    );
+  }
+
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateTransactionDto,
+    timezone: string,
+  ) {
     const existing = await this.findOne(userId, id);
     await this.assertAccountOwnership(userId, dto.accountId);
+
+    // Una transacción confirmada ya ocurrió: no puede tener fecha futura.
+    if (
+      dto.status === TransactionStatus.CONFIRMED &&
+      existing.status !== TransactionStatus.CONFIRMED
+    ) {
+      const effectiveDate = dto.date ?? existing.date;
+      if (effectiveDate.getTime() > todayForUser(timezone).getTime()) {
+        throw new BadRequestException(
+          'No puedes confirmar una transacción con fecha futura: indica la fecha real en que ocurrió.',
+        );
+      }
+    }
+
     if (dto.type !== undefined || dto.categoryId !== undefined) {
       const effectiveType: TransactionType = dto.type ?? existing.type;
       const effectiveCategoryId = dto.categoryId ?? existing.categoryId;
@@ -154,7 +209,10 @@ export class TransactionsService {
       where: { id, userId },
       data: {
         ...dto,
-        isModified: existing.source !== 'MANUAL' ? true : existing.isModified,
+        isModified:
+          existing.source !== 'MANUAL' && this.hasContentChanges(existing, dto)
+            ? true
+            : existing.isModified,
       },
     });
     if (result.count === 0) {

@@ -82,7 +82,7 @@ export class ToolRegistryService {
       getCashflowProjectionTool({ cashflowService, accountResolver }),
       getBudgetStatusTool({ budgetsService }),
       getNetWorthTool({ netWorthService }),
-      getUpcomingBillsTool({ recurringRulesService }),
+      getUpcomingBillsTool({ transactionsService }),
       listRecurringExpensesTool({ recurringRulesService }),
       fluxoListTool(registry),
       fluxoSearchTool(registry),

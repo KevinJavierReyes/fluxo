@@ -37,5 +37,22 @@ export class RecurringRulesGenerator {
     this.logger.log(
       `Horizonte de recurrencias extendido para ${rules.length} regla(s)`,
     );
+
+    await this.autoConfirmDueOccurrences();
+  }
+
+  private async autoConfirmDueOccurrences() {
+    const rules = await this.prisma.recurringRule.findMany({
+      where: { isActive: true, autoConfirm: true },
+    });
+
+    let confirmed = 0;
+    for (const rule of rules) {
+      confirmed += await this.recurringRulesService.confirmDueOccurrences(rule);
+    }
+
+    this.logger.log(
+      `Auto-confirmadas ${confirmed} ocurrencia(s) de ${rules.length} regla(s)`,
+    );
   }
 }
