@@ -3,6 +3,7 @@ export * from "./enums";
 export * from "./schemas/account.schema";
 export * from "./schemas/category.schema";
 export * from "./schemas/transaction.schema";
+export * from "./schemas/transfer.schema";
 export * from "./schemas/recurring-rule.schema";
 export * from "./schemas/expense-template.schema";
 export * from "./schemas/savings-goal.schema";

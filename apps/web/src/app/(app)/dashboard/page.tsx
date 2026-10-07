@@ -206,6 +206,7 @@ function KpiRow({ data }: { data: Overview }) {
       label: 'Saldo actual (real)',
       value: formatCurrency(data.totalBalance),
       tone: data.totalBalance < 0 ? 'negative' : 'neutral',
+      hint: 'Lo confirmado hasta hoy, sumando tus cuentas.',
     },
     ...(showProjected
       ? [
@@ -215,8 +216,8 @@ function KpiRow({ data }: { data: Overview }) {
             tone: data.totals.endingBalance < 0 ? ('negative' as const) : ('neutral' as const),
             hint:
               data.totals.pendingCount > 0
-                ? `Incluye ${data.totals.pendingCount} pendiente(s) por confirmar`
-                : undefined,
+                ? `Saldo real + ${data.totals.pendingCount} pendiente(s) por confirmar: movimientos programados o futuros que aún no ocurren.`
+                : 'Saldo real + los movimientos futuros del rango.',
           },
         ]
       : []),
@@ -224,16 +225,19 @@ function KpiRow({ data }: { data: Overview }) {
       label: 'Cambio del periodo',
       value: formatSignedCurrency(data.totals.periodChange),
       tone: data.totals.periodChange < 0 ? 'negative' : 'positive',
+      hint: 'Ingresos − egresos confirmados del periodo.',
     },
     {
       label: 'Egresos del periodo',
       value: `-${formatCurrency(data.totals.periodExpenses)}`,
       tone: 'negative',
+      hint: 'Gastos ya confirmados. No incluye pendientes ni transferencias entre tus cuentas.',
     },
     {
       label: 'Ingresos del periodo',
       value: `+${formatCurrency(data.totals.periodIncome)}`,
       tone: 'positive',
+      hint: 'Ingresos ya confirmados. No incluye pendientes ni transferencias entre tus cuentas.',
     },
   ];
 

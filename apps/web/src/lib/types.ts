@@ -84,6 +84,17 @@ export interface Transaction {
   recurringRuleId: string | null;
 }
 
+export interface Transfer {
+  id: string;
+  fromAccountId: string;
+  toAccountId: string;
+  fromAccount: { name: string };
+  toAccount: { name: string };
+  amount: number;
+  date: string;
+  description: string | null;
+}
+
 export interface RecurringRule {
   id: string;
   name: string;
