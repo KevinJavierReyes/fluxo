@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  ArrowRightLeft,
   CreditCard,
   FileClock,
   Landmark,
@@ -24,6 +25,7 @@ export const NAV_LINKS: NavLink[] = [
   { href: '/accounts', label: 'Cuentas', icon: Wallet },
   { href: '/categories', label: 'Categorías', icon: Tags },
   { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight },
+  { href: '/transfers', label: 'Transferencias', icon: ArrowRightLeft },
   { href: '/recurring-rules', label: 'Gastos programados', icon: Repeat },
   { href: '/expense-templates', label: 'Gastos frecuentes', icon: FileClock },
   { href: '/savings-goals', label: 'Ahorros', icon: PiggyBank },
