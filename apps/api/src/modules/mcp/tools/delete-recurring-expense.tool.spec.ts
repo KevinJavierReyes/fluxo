@@ -44,6 +44,7 @@ describe('deleteRecurringExpenseTool', () => {
     expect(deps.mocks.recurringRulesService.remove).toHaveBeenCalledWith(
       'user-1',
       'rule-1',
+      { deleteConfirmed: false },
     );
     expect(result.entityId).toBe('rule-1');
   });
