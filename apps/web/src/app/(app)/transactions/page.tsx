@@ -1,7 +1,12 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { createTransactionSchema, TransactionType, type CreateTransactionInput } from '@fluxo/shared';
+import {
+  createTransactionSchema,
+  TransactionStatus,
+  TransactionType,
+  type CreateTransactionInput,
+} from '@fluxo/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CalendarIcon,
@@ -26,15 +31,23 @@ import {
   useCreateTransaction,
   useDeleteTransaction,
   useTransactions,
+  useUpdateTransaction,
 } from '@/hooks/use-transactions';
 import { useCashflowProjection } from '@/hooks/use-cashflow-projection';
-import type { ExpenseTemplate, Transaction } from '@/lib/types';
+import type { CashflowDayPoint, ExpenseTemplate, Transaction } from '@/lib/types';
 import { QueryError } from '@/components/query-error';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { ConfirmDeleteButton } from '@/components/confirm-delete-button';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { EditTransactionDialog } from '@/components/edit-transaction-dialog';
+import {
+  STATUS_FILTER_VALUES,
+  StatusFilterSelect,
+  TransactionStatusActions,
+  TransactionStatusBadge,
+  type StatusFilter,
+} from '@/components/transaction-status';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   AlertDialog,
@@ -69,9 +82,11 @@ import {
   defaultRange,
   dateToUtcMidnight,
   toIsoDate,
+  todayUtc,
   utcMidnightToLocalDate,
   type DateRange,
 } from '@/lib/date-range';
+import { cn } from '@/lib/utils';
 
 /**
  * Un dato del resumen del día: ícono + monto, ambos coloreados según signo.
@@ -107,41 +122,81 @@ function DayFigure({
   );
 }
 
-/** Saldo con el que se empezó y terminó el día, junto al nombre del día. */
-function DayBalance({ balance }: { balance?: { openingBalance: number; closingBalance: number } }) {
-  if (!balance) return null;
+/** Diferencia mínima (en soles) para considerar que el saldo proyectado se aparta del real. */
+const BALANCE_EPSILON = 0.005;
+
+/**
+ * Saldo con el que se empezó y terminó el día, junto al nombre del día.
+ * Los días pasados y de hoy muestran el saldo real; si hay pendientes que lo
+ * mueven, se agrega aparte el saldo proyectado ("proy."). Los días futuros no
+ * tienen saldo real, así que muestran el proyectado, atenuado y rotulado.
+ */
+function DayBalance({ point }: { point?: CashflowDayPoint }) {
+  if (!point) return null;
+
+  const isFutureDay = point.realOpeningBalance === null || point.realClosingBalance === null;
+  const opening = isFutureDay ? point.openingBalance : point.realOpeningBalance!;
+  const closing = isFutureDay ? point.closingBalance : point.realClosingBalance!;
+  const projectedDiffers =
+    !isFutureDay &&
+    (Math.abs(point.closingBalance - closing) > BALANCE_EPSILON ||
+      Math.abs(point.openingBalance - opening) > BALANCE_EPSILON);
+  const kind = isFutureDay ? 'proyectado' : 'real';
+
   return (
-    <div className="flex items-center gap-2.5">
+    <div className={cn('flex items-center gap-2.5', isFutureDay && 'opacity-70')}>
       <DayFigure
         icon={SunriseIcon}
-        value={formatCurrency(balance.openingBalance)}
-        label="Saldo con el que empezaste el día"
-        tone={balance.openingBalance >= 0 ? 'success' : 'destructive'}
+        value={formatCurrency(opening)}
+        label={`Saldo ${kind} con el que ${isFutureDay ? 'empezarías' : 'empezaste'} el día`}
+        tone={opening >= 0 ? 'success' : 'destructive'}
       />
       <DayFigure
         icon={SunsetIcon}
-        value={formatCurrency(balance.closingBalance)}
-        label="Saldo con el que terminaste el día"
-        tone={balance.closingBalance >= 0 ? 'success' : 'destructive'}
+        value={formatCurrency(closing)}
+        label={`Saldo ${kind} con el que ${isFutureDay ? 'terminarías' : 'terminaste'} el día`}
+        tone={closing >= 0 ? 'success' : 'destructive'}
       />
+      {isFutureDay && (
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">proyectado</span>
+      )}
+      {projectedDiffers && (
+        <Tooltip>
+          <TooltipTrigger
+            render={<span className="cursor-default text-xs text-muted-foreground" />}
+          >
+            proy. {formatCurrency(point.closingBalance)}
+          </TooltipTrigger>
+          <TooltipContent>Saldo proyectado al cierre del día si se confirman las pendientes</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
 
-/** Ingreso/gasto del día. */
-function DayIncomeExpense({ income, expense }: { income: number; expense: number }) {
+/** Ingreso/gasto del día. Incluye las pendientes (proyectadas) y lo avisa en el tooltip. */
+function DayIncomeExpense({
+  income,
+  expense,
+  hasPending,
+}: {
+  income: number;
+  expense: number;
+  hasPending: boolean;
+}) {
+  const suffix = hasPending ? ' (incluye pendientes)' : '';
   return (
     <div className="flex items-center gap-2.5">
       <DayFigure
         icon={TrendingUpIcon}
         value={formatSignedCurrency(income)}
-        label="Ingresos del día"
+        label={`Ingresos del día${suffix}`}
         tone="success"
       />
       <DayFigure
         icon={TrendingDownIcon}
         value={formatSignedCurrency(-expense)}
-        label="Gastos del día"
+        label={`Gastos del día${suffix}`}
         tone="destructive"
       />
     </div>
@@ -155,6 +210,7 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');
   const [filterAccountIds, setFilterAccountIds] = useState<string[]>([]);
   const [filterCategoryIds, setFilterCategoryIds] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -178,17 +234,20 @@ export default function TransactionsPage() {
     filterType !== 'all' ||
     filterAccountIds.length > 0 ||
     filterCategoryIds.length > 0 ||
+    filterStatus !== 'all' ||
     debouncedSearch !== '';
   const activeFilterCount =
     (filterType !== 'all' ? 1 : 0) +
     (filterAccountIds.length > 0 ? 1 : 0) +
     (filterCategoryIds.length > 0 ? 1 : 0) +
+    (filterStatus !== 'all' ? 1 : 0) +
     (debouncedSearch !== '' ? 1 : 0);
 
   const clearFilters = () => {
     setFilterType('all');
     setFilterAccountIds([]);
     setFilterCategoryIds([]);
+    setFilterStatus('all');
     setSearchInput('');
   };
 
@@ -200,6 +259,7 @@ export default function TransactionsPage() {
     from: toIsoDate(range.from),
     to: toIsoDate(range.to),
     type: filterType === 'all' ? undefined : filterType,
+    status: STATUS_FILTER_VALUES[filterStatus],
     accountIds: filterAccountIds,
     categoryIds: filterCategoryIds,
     q: debouncedSearch || undefined,
@@ -211,6 +271,7 @@ export default function TransactionsPage() {
   const { data: templates } = useExpenseTemplates();
   const createTransaction = useCreateTransaction();
   const deleteTransaction = useDeleteTransaction();
+  const updateTransaction = useUpdateTransaction();
   const bulkDeleteTransactions = useBulkDeleteTransactions();
   const applyTemplate = useApplyExpenseTemplate();
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -227,6 +288,7 @@ export default function TransactionsPage() {
     filterType,
     filterAccountIds.join(','),
     filterCategoryIds.join(','),
+    filterStatus,
     debouncedSearch,
   ].join('|');
   const [prevSelectionFiltersKey, setPrevSelectionFiltersKey] = useState(selectionFiltersKey);
@@ -254,20 +316,32 @@ export default function TransactionsPage() {
 
   // `transactions` ya viene ordenado por fecha desc desde la API, así que las
   // filas de un mismo día son consecutivas: basta un solo recorrido lineal.
+  // Las saltadas no ocurrieron: se listan pero no suman al ingreso/gasto del día.
   const dateGroups = useMemo(() => {
     if (!transactions) return [];
-    const result: { date: string; income: number; expense: number; transactions: Transaction[] }[] = [];
+    const result: {
+      date: string;
+      income: number;
+      expense: number;
+      hasPending: boolean;
+      transactions: Transaction[];
+    }[] = [];
     for (const tx of transactions) {
+      const counts = tx.status !== TransactionStatus.SKIPPED;
       const last = result[result.length - 1];
       if (last && last.date === tx.date) {
-        if (tx.type === 'INCOME') last.income += tx.amount;
-        else last.expense += tx.amount;
+        if (counts) {
+          if (tx.type === 'INCOME') last.income += tx.amount;
+          else last.expense += tx.amount;
+        }
+        if (tx.status === TransactionStatus.PENDING) last.hasPending = true;
         last.transactions.push(tx);
       } else {
         result.push({
           date: tx.date,
-          income: tx.type === 'INCOME' ? tx.amount : 0,
-          expense: tx.type === 'EXPENSE' ? tx.amount : 0,
+          income: counts && tx.type === 'INCOME' ? tx.amount : 0,
+          expense: counts && tx.type === 'EXPENSE' ? tx.amount : 0,
+          hasPending: tx.status === TransactionStatus.PENDING,
           transactions: [tx],
         });
       }
@@ -275,18 +349,19 @@ export default function TransactionsPage() {
     return result;
   }, [transactions]);
 
-  // El saldo real (a diferencia de income/expense) ignora los filtros de
+  // El saldo (a diferencia de income/expense) ignora los filtros de
   // tipo/categoría/búsqueda — solo respeta el rango y las cuentas filtradas.
   const balanceByDate = useMemo(() => {
-    const map = new Map<string, { openingBalance: number; closingBalance: number }>();
+    const map = new Map<string, CashflowDayPoint>();
     for (const point of projection?.points ?? []) {
-      map.set(point.date.slice(0, 10), {
-        openingBalance: point.openingBalance,
-        closingBalance: point.closingBalance,
-      });
+      map.set(point.date.slice(0, 10), point);
     }
     return map;
   }, [projection]);
+
+  const todayIso = toIsoDate(todayUtc());
+  const handleSetStatus = (tx: Transaction, status: TransactionStatus) =>
+    updateTransaction.mutate({ id: tx.id, input: { status } });
 
   const {
     register,
@@ -675,6 +750,9 @@ export default function TransactionsPage() {
             triggerClassName="w-56"
           />
         </FormField>
+        <FormField label="Estado">
+          <StatusFilterSelect value={filterStatus} onValueChange={setFilterStatus} triggerClassName="w-40" />
+        </FormField>
         <FormField label="Descripción" className="min-w-[220px] flex-1">
           <Input
             placeholder="Buscar por descripción…"
@@ -768,6 +846,9 @@ export default function TransactionsPage() {
                   triggerClassName="w-full"
                 />
               </FormField>
+              <FormField label="Estado">
+                <StatusFilterSelect value={filterStatus} onValueChange={setFilterStatus} triggerClassName="w-full" />
+              </FormField>
             </div>
             <SheetFooter>
               {hasActiveFilters && (
@@ -856,9 +937,13 @@ export default function TransactionsPage() {
                             <span className="text-sm font-medium text-muted-foreground">
                               {formatLongDate(group.date)}
                             </span>
-                            <DayBalance balance={balanceByDate.get(group.date.slice(0, 10))} />
+                            <DayBalance point={balanceByDate.get(group.date.slice(0, 10))} />
                           </div>
-                          <DayIncomeExpense income={group.income} expense={group.expense} />
+                          <DayIncomeExpense
+                            income={group.income}
+                            expense={group.expense}
+                            hasPending={group.hasPending}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -866,8 +951,13 @@ export default function TransactionsPage() {
                       const cat = categoryById.get(tx.categoryId);
                       const accountName = accountById.get(tx.accountId);
                       const signedAmount = tx.type === 'INCOME' ? tx.amount : -tx.amount;
+                      const isPending = tx.status === TransactionStatus.PENDING;
+                      const isSkipped = tx.status === TransactionStatus.SKIPPED;
                       return (
-                        <TableRow key={tx.id}>
+                        <TableRow
+                          key={tx.id}
+                          className={cn(isPending && 'border-dashed bg-muted/20 opacity-80', isSkipped && 'opacity-50')}
+                        >
                           <TableCell className="pl-4">
                             <Checkbox
                               aria-label="Seleccionar transacción"
@@ -879,8 +969,11 @@ export default function TransactionsPage() {
                             <div className="flex items-center gap-2">
                               {cat && <GroupChip color={cat.groupColor} icon={cat.groupIcon} size="sm" />}
                               <div className="flex min-w-0 flex-col gap-0.5">
-                                <span className="font-medium">{cat?.name ?? '—'}</span>
+                                <span className={cn('font-medium', isSkipped && 'line-through')}>
+                                  {cat?.name ?? '—'}
+                                </span>
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <TransactionStatusBadge transaction={tx} todayIso={todayIso} />
                                   {tx.description && <span className="truncate">{tx.description}</span>}
                                   {accountName && (
                                     <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
@@ -892,12 +985,22 @@ export default function TransactionsPage() {
                             </div>
                           </TableCell>
                           <TableCell
-                            className={`text-right font-medium ${tx.type === 'INCOME' ? 'text-success' : 'text-destructive'}`}
+                            className={cn(
+                              'text-right font-medium',
+                              tx.type === 'INCOME' ? 'text-success' : 'text-destructive',
+                              isSkipped && 'line-through',
+                            )}
                           >
                             {formatSignedCurrency(signedAmount)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end">
+                            <div className="flex items-center justify-end gap-1">
+                              <TransactionStatusActions
+                                transaction={tx}
+                                accounts={accounts}
+                                onSetStatus={handleSetStatus}
+                                disabled={updateTransaction.isPending}
+                              />
                               <EditTransactionDialog
                                 transaction={tx}
                                 accounts={accounts}
@@ -944,16 +1047,25 @@ export default function TransactionsPage() {
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="text-sm font-medium text-muted-foreground">{formatLongDate(group.date)}</span>
-                  <DayBalance balance={balanceByDate.get(group.date.slice(0, 10))} />
+                  <DayBalance point={balanceByDate.get(group.date.slice(0, 10))} />
                 </div>
-                <DayIncomeExpense income={group.income} expense={group.expense} />
+                <DayIncomeExpense income={group.income} expense={group.expense} hasPending={group.hasPending} />
               </div>
               {group.transactions.map((tx) => {
                 const cat = categoryById.get(tx.categoryId);
                 const accountName = accountById.get(tx.accountId);
                 const signedAmount = tx.type === 'INCOME' ? tx.amount : -tx.amount;
+                const isPending = tx.status === TransactionStatus.PENDING;
+                const isSkipped = tx.status === TransactionStatus.SKIPPED;
                 return (
-                  <Card key={tx.id} className="py-3">
+                  <Card
+                    key={tx.id}
+                    className={cn(
+                      'py-3',
+                      isPending && 'border border-dashed bg-muted/20 opacity-80 shadow-none ring-0',
+                      isSkipped && 'opacity-50',
+                    )}
+                  >
                     <CardContent className="flex items-start gap-3">
                       <Checkbox
                         className="mt-1"
@@ -964,14 +1076,21 @@ export default function TransactionsPage() {
                       {cat && <GroupChip color={cat.groupColor} icon={cat.groupIcon} size="sm" />}
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="min-w-0 truncate font-medium">{cat?.name ?? '—'}</span>
+                          <span className={cn('min-w-0 truncate font-medium', isSkipped && 'line-through')}>
+                            {cat?.name ?? '—'}
+                          </span>
                           <span
-                            className={`shrink-0 font-medium ${tx.type === 'INCOME' ? 'text-success' : 'text-destructive'}`}
+                            className={cn(
+                              'shrink-0 font-medium',
+                              tx.type === 'INCOME' ? 'text-success' : 'text-destructive',
+                              isSkipped && 'line-through',
+                            )}
                           >
                             {formatSignedCurrency(signedAmount)}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <TransactionStatusBadge transaction={tx} todayIso={todayIso} />
                           {tx.description && <span className="truncate">{tx.description}</span>}
                           {accountName && (
                             <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
@@ -979,7 +1098,13 @@ export default function TransactionsPage() {
                             </Badge>
                           )}
                         </div>
-                        <div className="mt-1 flex justify-end gap-1">
+                        <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
+                          <TransactionStatusActions
+                            transaction={tx}
+                            accounts={accounts}
+                            onSetStatus={handleSetStatus}
+                            disabled={updateTransaction.isPending}
+                          />
                           <EditTransactionDialog
                             transaction={tx}
                             accounts={accounts}

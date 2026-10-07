@@ -194,12 +194,32 @@ function ProjectionAlert({ projection }: { projection: Overview['projection'] })
 }
 
 function KpiRow({ data }: { data: Overview }) {
-  const items = [
+  // El saldo proyectado a fin de rango solo aporta cuando el rango llega al futuro.
+  const showProjected = data.hasFuture;
+  const items: {
+    label: string;
+    value: string;
+    tone: 'negative' | 'positive' | 'neutral';
+    hint?: string;
+  }[] = [
     {
-      label: 'Saldo total',
+      label: 'Saldo actual (real)',
       value: formatCurrency(data.totalBalance),
       tone: data.totalBalance < 0 ? 'negative' : 'neutral',
     },
+    ...(showProjected
+      ? [
+          {
+            label: 'Saldo a fin de rango (proyectado)',
+            value: formatCurrency(data.totals.endingBalance),
+            tone: data.totals.endingBalance < 0 ? ('negative' as const) : ('neutral' as const),
+            hint:
+              data.totals.pendingCount > 0
+                ? `Incluye ${data.totals.pendingCount} pendiente(s) por confirmar`
+                : undefined,
+          },
+        ]
+      : []),
     {
       label: 'Cambio del periodo',
       value: formatSignedCurrency(data.totals.periodChange),
@@ -215,10 +235,15 @@ function KpiRow({ data }: { data: Overview }) {
       value: `+${formatCurrency(data.totals.periodIncome)}`,
       tone: 'positive',
     },
-  ] as const;
+  ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div
+      className={cn(
+        'grid gap-4 sm:grid-cols-2',
+        items.length > 4 ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
+      )}
+    >
       {items.map((item) => (
         <Card key={item.label}>
           <CardHeader>
@@ -232,6 +257,7 @@ function KpiRow({ data }: { data: Overview }) {
             >
               {item.value}
             </CardTitle>
+            {item.hint && <CardDescription className="text-xs">{item.hint}</CardDescription>}
           </CardHeader>
         </Card>
       ))}
@@ -240,9 +266,10 @@ function KpiRow({ data }: { data: Overview }) {
 }
 
 /**
- * Saldo a lo largo del periodo. Cuando el rango pasa de hoy, el tramo futuro se
- * dibuja punteado: es la proyección basada en recurrencias y movimientos ya
- * registrados a futuro.
+ * Saldo a lo largo del periodo. La línea sólida es el saldo real (solo lo
+ * confirmado, hasta hoy). Cuando el rango pasa de hoy, el tramo punteado es la
+ * proyección: lo confirmado más lo pendiente (recurrencias y movimientos
+ * registrados a futuro).
  */
 function BalanceChart({
   data,
@@ -264,8 +291,10 @@ function BalanceChart({
 
     return series.map((point, index) => ({
       bucket: point.bucket,
-      // El punto de corte pertenece a ambas series para que las curvas se peguen.
-      real: point.isFuture ? null : point.closingBalance,
+      // Real = solo CONFIRMED, hasta hoy. Proyectado = CONFIRMED + PENDING, desde
+      // hoy: el bucket de hoy pertenece a ambas series, así el tramo punteado
+      // arranca donde termina el sólido (y muestra el salto de las pendientes).
+      real: point.isFuture ? null : point.realClosingBalance,
       proyectado:
         point.isFuture || index === lastRealIndex ? point.closingBalance : null,
     }));
@@ -297,8 +326,8 @@ function BalanceChart({
           <CardTitle>Saldo de cuentas</CardTitle>
           <CardDescription>
             {hasFuture
-              ? 'El tramo punteado es tu saldo proyectado.'
-              : 'Saldo acumulado al cierre de cada periodo.'}
+              ? 'La línea sólida es tu saldo real; la punteada, el proyectado (incluye lo pendiente de confirmar).'
+              : 'Saldo real acumulado al cierre de cada periodo.'}
           </CardDescription>
         </div>
         <GranularityToggle
@@ -352,7 +381,7 @@ function BalanceChart({
               <Tooltip
                 formatter={(value: number, name: string) => [
                   formatCurrency(value),
-                  name === 'real' ? 'Saldo' : 'Saldo proyectado',
+                  name === 'real' ? 'Saldo real' : 'Saldo proyectado',
                 ]}
                 labelFormatter={(label: string) => formatLongDate(label)}
                 contentStyle={CHART_TOOLTIP_STYLE}

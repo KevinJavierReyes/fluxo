@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TransactionType } from '@prisma/client';
+import { TransactionStatus, TransactionType } from '@prisma/client';
 import type { TransactionsService } from '../../transactions/transactions.service';
 import { requireResolved } from '../errors/mcp-error';
 import type { AccountResolver } from '../resolvers/account.resolver';
@@ -26,6 +26,13 @@ const inputSchema = {
     .optional()
     .describe('Fecha final YYYY-MM-DD, inclusive'),
   type: z.nativeEnum(TransactionType).optional(),
+  status: z
+    .array(z.nativeEnum(TransactionStatus))
+    .min(1)
+    .optional()
+    .describe(
+      'Estados a incluir. Por defecto CONFIRMED y PENDING (las SKIPPED, saltadas, quedan ocultas).',
+    ),
   accountName: z.string().optional().describe('Nombre (o id) de la cuenta'),
   categoryName: z.string().optional().describe('Nombre (o id) de la categoría'),
   limit: z.number().int().min(1).max(100).default(20),
@@ -76,30 +83,43 @@ export function searchTransactionsTool(deps: {
         from: args.from ? new Date(args.from as string) : undefined,
         to: args.to ? new Date(args.to as string) : undefined,
         type: args.type as TransactionType | undefined,
+        status: args.status as TransactionStatus[] | undefined,
         accountId,
         categoryId,
         limit: (args.limit as number) ?? 20,
         cursor: args.cursor as string | undefined,
       });
 
-      const sumIncome = page.items
+      // Los totales solo suman lo confirmado: una PENDING es una proyección y
+      // una SKIPPED no ocurrió; se reportan aparte las pendientes.
+      const confirmed = page.items.filter(
+        (t) => t.status === TransactionStatus.CONFIRMED,
+      );
+      const sumIncome = confirmed
         .filter((t) => t.type === TransactionType.INCOME)
         .reduce((sum, t) => sum + Number(t.amount), 0);
-      const sumExpense = page.items
+      const sumExpense = confirmed
         .filter((t) => t.type === TransactionType.EXPENSE)
         .reduce((sum, t) => sum + Number(t.amount), 0);
+      const pendingCount = page.items.filter(
+        (t) => t.status === TransactionStatus.PENDING,
+      ).length;
 
       const summary =
         page.items.length === 0
           ? 'No se encontraron transacciones con esos filtros.'
-          : `${page.items.length} transacción(es)${page.hasMore ? ' en esta página' : ''}. Ingresos: ${sumIncome.toFixed(2)}, Egresos: ${sumExpense.toFixed(2)}.\n` +
+          : `${page.items.length} transacción(es)${page.hasMore ? ' en esta página' : ''}. Ingresos confirmados: ${sumIncome.toFixed(2)}, Egresos confirmados: ${sumExpense.toFixed(2)}${pendingCount > 0 ? ` (${pendingCount} pendiente(s) de confirmar no suman)` : ''}.\n` +
             page.items
               .slice(0, MAX_LISTED_ITEMS)
               .map((t) => {
                 const sign = t.type === TransactionType.INCOME ? '+' : '-';
                 const dateStr = t.date.toISOString().slice(0, 10);
                 const desc = t.description ? ` — ${t.description}` : '';
-                return `${dateStr} ${sign}${Number(t.amount).toFixed(2)} · ${t.category.name} (${t.account.name})${desc}`;
+                const status =
+                  t.status === TransactionStatus.CONFIRMED
+                    ? ''
+                    : ` [${t.status}]`;
+                return `${dateStr} ${sign}${Number(t.amount).toFixed(2)} · ${t.category.name} (${t.account.name})${desc}${status}`;
               })
               .join('\n') +
             (page.items.length > MAX_LISTED_ITEMS
@@ -115,6 +135,7 @@ export function searchTransactionsTool(deps: {
         hasMore: page.hasMore,
         sumIncome,
         sumExpense,
+        pendingCount,
       });
     },
   };

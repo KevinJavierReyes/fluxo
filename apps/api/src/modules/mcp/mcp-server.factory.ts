@@ -16,6 +16,7 @@ const FLUXO_INSTRUCTIONS = `Fluxo es la app de finanzas personales del usuario. 
 - Las cuentas y categorías se referencian por nombre o id en las tools de lectura. Si un nombre no matchea exactamente o hay más de una coincidencia, la tool devuelve las opciones válidas — no adivines un id, repregunta al usuario con esas opciones.
 - fluxo_search encuentra el id de un recurso de configuración por nombre. fluxo_create ya incluye en su descripción los campos de cada recurso — no hace falta pedir el schema por separado.
 - Las tools de escritura aceptan clientRequestId opcional: generá uno por operación y reenvialo si reintentás, para no duplicar el movimiento.
+- Cada transacción tiene un status: CONFIRMED (ya ocurrió), PENDING (proyectada, p. ej. una ocurrencia recurrente aún sin confirmar) o SKIPPED (no se hizo, no cuenta en ningún saldo). El saldo real (get_dashboard, get_net_worth) solo suma CONFIRMED; la proyección (get_cashflow_projection) suma CONFIRMED + PENDING y expone ambos saldos. Para confirmar o saltar una proyectada usa update_transaction con status (get_upcoming_bills lista las PENDING con su id); si se pagó otro día, pasa esa fecha en date. Las transacciones que registras tú nacen CONFIRMED.
 - No hay ninguna tool que borre más de un elemento a la vez, y borrar exige confirm:true explícito.`;
 
 @Injectable()

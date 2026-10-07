@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, TransactionType } from '@prisma/client';
+import { Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 import type { OverviewQuery } from '@fluxo/shared';
 import {
   addDays,
@@ -52,10 +52,11 @@ export class DashboardService {
 
     const totalBalance = accountBalances.reduce((sum, a) => sum + a.balance, 0);
 
-    const projection = await this.cashflowService.getProjection(userId, {
-      from: today,
-      to: horizon,
-    });
+    const projection = await this.cashflowService.getProjection(
+      userId,
+      { from: today, to: horizon },
+      timezone,
+    );
 
     const monthStart = new Date(
       Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
@@ -110,12 +111,13 @@ export class DashboardService {
       timezone,
     );
 
-    const transactions = await this.prisma.transaction.findMany({
+    const rows = await this.prisma.transaction.findMany({
       where: this.buildTransactionWhere(userId, query),
       select: {
         date: true,
         type: true,
         amount: true,
+        status: true,
         category: {
           select: {
             group: {
@@ -126,8 +128,29 @@ export class DashboardService {
       },
     });
 
+    // Las PENDING vencidas se cuentan "hoy" (igual que en el saldo proyectado);
+    // las que caen fuera del rango una vez resuelta su fecha efectiva se descartan.
+    const todayKey = toDateKey(today);
+    const fromKey = toDateKey(from);
+    const toKey = toDateKey(to);
+    const pending: OverviewTransaction[] = [];
+    const transactions: OverviewTransaction[] = [];
+    for (const row of rows) {
+      if (row.status === TransactionStatus.PENDING) {
+        const effective = toDateKey(row.date) < todayKey ? today : row.date;
+        const key = toDateKey(effective);
+        if (key >= fromKey && key <= toKey) {
+          pending.push({ ...row, date: effective });
+        }
+      } else if (row.status === TransactionStatus.CONFIRMED) {
+        transactions.push(row);
+      }
+    }
+
+    // Los KPIs y los desgloses son del periodo real (CONFIRMED); las barras de
+    // movimientos suman además las PENDING para que el tramo futuro se vea.
     const changesSeries = this.buildChangesSeries(
-      transactions,
+      [...transactions, ...pending],
       from,
       to,
       granularity,
@@ -149,10 +172,11 @@ export class DashboardService {
 
     // La alerta de saldo en rojo mira siempre los próximos 90 días, sin importar
     // el rango ni los filtros que el usuario tenga puestos.
-    const projection = await this.cashflowService.getProjection(userId, {
-      from: today,
-      to: addDays(today, PROJECTION_HORIZON_DAYS),
-    });
+    const projection = await this.cashflowService.getProjection(
+      userId,
+      { from: today, to: addDays(today, PROJECTION_HORIZON_DAYS) },
+      timezone,
+    );
 
     const endingBalance =
       balanceSeries.length > 0
@@ -167,6 +191,7 @@ export class DashboardService {
       wallets,
       totals: {
         endingBalance,
+        pendingCount: pending.length,
         periodChange: periodIncome - periodExpenses,
         periodIncome,
         periodExpenses,
@@ -204,7 +229,12 @@ export class DashboardService {
 
     return {
       userId,
-      date: { gte: from, lte: to },
+      // Las PENDING vencidas pueden tener fecha anterior a `from` y aun así caer
+      // en el rango como "hoy": su cota inferior se resuelve luego en memoria.
+      OR: [
+        { status: TransactionStatus.CONFIRMED, date: { gte: from, lte: to } },
+        { status: TransactionStatus.PENDING, date: { lte: to } },
+      ],
       ...(accountId ? { accountId } : { account: { isArchived: false } }),
       ...(categoryGroupIds && categoryGroupIds.length > 0
         ? { category: { groupId: { in: categoryGroupIds } } }
@@ -316,6 +346,7 @@ export class DashboardService {
       where: {
         userId,
         type: TransactionType.EXPENSE,
+        status: TransactionStatus.CONFIRMED,
         date: { gte: start, lte: end },
       },
       _sum: { amount: true },

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TransactionSource, TransactionType } from "../enums";
+import { TransactionSource, TransactionStatus, TransactionType } from "../enums";
 
 export const createTransactionSchema = z.object({
   accountId: z.string().min(1),
@@ -18,7 +18,10 @@ export const createTransactionSchema = z.object({
 });
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 
-export const updateTransactionSchema = createTransactionSchema.partial();
+export const updateTransactionSchema = createTransactionSchema.partial().extend({
+  /** Confirmar (CONFIRMED), saltar (SKIPPED) o reabrir (PENDING) una transacción. */
+  status: z.nativeEnum(TransactionStatus).optional(),
+});
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 
 export const transactionResponseSchema = z.object({
@@ -30,6 +33,7 @@ export const transactionResponseSchema = z.object({
   date: z.coerce.date(),
   description: z.string().nullable(),
   source: z.nativeEnum(TransactionSource),
+  status: z.nativeEnum(TransactionStatus),
   isModified: z.boolean(),
   recurringRuleId: z.string().nullable(),
   expenseTemplateId: z.string().nullable(),
@@ -62,6 +66,22 @@ export const listTransactionsQuerySchema = z.object({
   /** CSV de ids de categoría: `?categoryIds=a,b,c` (alternativa multi a `categoryId`). */
   categoryIds: csvIds,
   type: z.nativeEnum(TransactionType).optional(),
+  /**
+   * CSV de estados: `?status=PENDING,CONFIRMED`. Si se omite, se listan
+   * CONFIRMED y PENDING (las SKIPPED quedan ocultas salvo que se pidan).
+   */
+  status: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value
+        ? value
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined,
+    )
+    .pipe(z.array(z.nativeEnum(TransactionStatus)).min(1).optional()),
   /** Búsqueda de texto libre sobre la descripción. */
   q: z.string().min(1).max(120).optional(),
   /** Cursor de paginación: el id de la última fila de la página anterior. */

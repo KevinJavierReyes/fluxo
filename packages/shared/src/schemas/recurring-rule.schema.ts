@@ -15,6 +15,8 @@ export const createRecurringRuleSchema = z
     byWeekday: z.coerce.number().int().min(0).max(6).optional(),
     startDate: z.coerce.date(),
     endDate: z.coerce.date().optional(),
+    /** Si es true, las ocurrencias se confirman solas al llegar su fecha. */
+    autoConfirm: z.boolean().default(false),
   })
   .refine((v) => v.frequency !== RecurrenceFrequency.MONTHLY || v.byMonthDay !== undefined, {
     message: "byMonthDay es requerido para frecuencia MONTHLY",
@@ -34,6 +36,7 @@ export const updateRecurringRuleSchema = z.object({
   description: z.string().max(280).optional(),
   endDate: z.coerce.date().optional(),
   isActive: z.boolean().optional(),
+  autoConfirm: z.boolean().optional(),
 });
 export type UpdateRecurringRuleInput = z.infer<typeof updateRecurringRuleSchema>;
 
@@ -52,6 +55,7 @@ export const recurringRuleResponseSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date().nullable(),
   isActive: z.boolean(),
+  autoConfirm: z.boolean(),
   lastGeneratedUntil: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

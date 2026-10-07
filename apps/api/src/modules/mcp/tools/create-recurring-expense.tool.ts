@@ -55,6 +55,12 @@ const inputSchema = {
       'YYYY-MM-DD, última fecha en que aplica; si se omite, no tiene fin.',
     ),
   description: z.string().max(280).optional(),
+  autoConfirm: z
+    .boolean()
+    .optional()
+    .describe(
+      'true = cada ocurrencia se confirma sola al llegar su fecha (sueldo, suscripciones); false (default) = quedan PENDING hasta que el usuario las confirme.',
+    ),
 };
 
 export function createRecurringExpenseTool(deps: {
@@ -115,6 +121,7 @@ export function createRecurringExpenseTool(deps: {
         byWeekday: args.weekday,
         startDate: args.startDate,
         endDate: args.endDate,
+        autoConfirm: args.autoConfirm,
       });
 
       const rule = await deps.recurringRulesService.create(ctx.userId, dto);

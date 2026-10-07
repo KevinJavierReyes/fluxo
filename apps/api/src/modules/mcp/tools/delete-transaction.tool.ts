@@ -28,7 +28,7 @@ export function deleteTransactionTool(deps: {
     config: {
       title: 'Borrar transacción',
       description:
-        'Borra una transacción por su id. Requiere confirm:true. No se puede borrar una ocurrencia generada por una regla recurrente (desactivá la regla en su lugar) ni si el usuario deshabilitó el borrado vía agente.',
+        'Borra una transacción por su id. Requiere confirm:true. No se puede borrar una ocurrencia generada por una regla recurrente (desactivá la regla en su lugar) ni si el usuario deshabilitó el borrado vía agente (para una ocurrencia que no se hizo usa update_transaction con status SKIPPED).',
       inputSchema,
       annotations: {
         readOnlyHint: false,
@@ -48,7 +48,7 @@ export function deleteTransactionTool(deps: {
       if (existing.source === 'RECURRING') {
         throw new McpToolError(
           'VALIDATION',
-          'Es una ocurrencia generada por una regla recurrente. Borrarla se deshace en la próxima generación — para evitarla de verdad, desactivá la regla con fluxo_update (resource: "recurring_rule").',
+          'Es una ocurrencia generada por una regla recurrente. Si solo esta ocurrencia no se hizo, márcala con update_transaction (status: "SKIPPED"); para evitarlas todas, desactivá la regla con fluxo_update (resource: "recurring_rule").',
         );
       }
 

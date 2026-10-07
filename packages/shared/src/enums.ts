@@ -27,6 +27,13 @@ export const TransactionSource = {
 } as const;
 export type TransactionSource = (typeof TransactionSource)[keyof typeof TransactionSource];
 
+export const TransactionStatus = {
+  PENDING: "PENDING",
+  CONFIRMED: "CONFIRMED",
+  SKIPPED: "SKIPPED",
+} as const;
+export type TransactionStatus = (typeof TransactionStatus)[keyof typeof TransactionStatus];
+
 export const RecurrenceFrequency = {
   DAILY: "DAILY",
   WEEKLY: "WEEKLY",
